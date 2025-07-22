@@ -38,104 +38,123 @@ class EmployeePresenceNode extends StatelessWidget {
         return Consumer<AttendanceStatusProvider>(
           builder: (context, attendanceProvider, child) {
             final attendanceStatus =
-                attendanceProvider.statuses[employeeId] ??
+                attendanceProvider.statuses[employee.employeeId] ??
                     EmployeeAttendanceStatus.unknown;
 
-            final bool isOnline =
-                attendanceStatus == EmployeeAttendanceStatus.checkedIn;
-            final Color onlineStatusColor =
-                isOnline ? Colors.green.shade400 : Colors.red.shade400;
-            final String onlineStatusText = isOnline ? 'Online' : 'Offline';
-
-            return InkWell(
+            return GestureDetector(
               onTap: onTap,
-              borderRadius: BorderRadius.circular(12),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  Stack(
-                    alignment: Alignment.topCenter,
-                    children: [
-                      EmployeeStatusAvatar(
-                        employeeId: employee.employeeId,
-                        imageUrl: employee.profileImageUrl,
-                        gender: employee.gender,
-                        radius: 32,
-                      ),
-                      // Overlay for employment status (ลาออก, etc.)
-                      if (employee.employmentStatus != null &&
-                          employee.employmentStatus!.isNotEmpty)
-                        ClipPath(
-                          clipper: _SemicircleClipper(),
-                          child: Container(
-                            width: 68, // Should match avatar diameter + padding
-                            height: 34, // Half of the width
-                            alignment: Alignment.topCenter,
-                            padding: const EdgeInsets.only(top: 2),
-                            color: Colors.redAccent.withOpacity(0.50),
-                            child: Text(
-                              employee.employmentStatus!,
-                              style: GoogleFonts.anuphan(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        )
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: ClipPath(
+                            clipper: _SemicircleClipper(),
+                            child: Container(
+                              color: _getStatusColor(attendanceStatus)
+                                  .withOpacity(0.15),
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    employee.nickname,
-                    style: GoogleFonts.anuphan(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    '(${employee.employeeId})',
-                    style: GoogleFonts.anuphan(
-                        fontSize: 11, color: Colors.white.withOpacity(0.7)),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (positionText.isNotEmpty)
-                    Text(
-                      positionText,
-                      style: GoogleFonts.anuphan(
-                          fontSize: 11, color: Colors.white.withOpacity(0.7)),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                          child: Column(
+                            children: [
+                              Text(
+                                employee.nickname,
+                                style: GoogleFonts.anuphan(
+                                    fontWeight: FontWeight.bold, fontSize: 14),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                positionText.isEmpty
+                                    ? '(${employee.employeeId})'
+                                    : positionText,
+                                style: GoogleFonts.anuphan(
+                                    fontSize: 11, color: Colors.grey.shade600),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
+                  ),
+                  Positioned(
+                    top: 10,
+                    left: 0,
+                    right: 0,
+                    child: EmployeeStatusAvatar(
+                      employeeId: employee.employeeId,
+                      imageUrl: employee.profileImageUrl,
+                      gender: employee.gender,
+                      radius: 30,
+                    ),
+                  ),
+                  if (employee.isOutsource)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: onlineStatusColor,
-                          shape: BoxShape.circle,
+                          color: Colors.blue.shade900,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white, width: 1.5)
+                        ),
+                        child: Text(
+                          'OutSource',
+                          style: GoogleFonts.anuphan(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        onlineStatusText,
-                        style: GoogleFonts.anuphan(
-                            fontSize: 11,
-                            color: Colors.white.withOpacity(0.9),
-                            fontWeight: FontWeight.w500),
+                    ),
+                  // --- [START] NEW WIDGET: Employment Status Badge ---
+                  if (employee.employmentStatus != null && employee.employmentStatus!.isNotEmpty)
+                    Positioned(
+                      bottom: 45, // Adjust position to be over the avatar
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade800.withOpacity(0.85),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            employee.employmentStatus!,
+                            style: GoogleFonts.anuphan(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  // --- [END] NEW WIDGET: Employment Status Badge ---
                 ],
               ),
             );
@@ -144,15 +163,30 @@ class EmployeePresenceNode extends StatelessWidget {
       },
     );
   }
+  
+  Color _getStatusColor(EmployeeAttendanceStatus status) {
+    switch (status) {
+      case EmployeeAttendanceStatus.checkedIn:
+        return Colors.green.shade500;
+      case EmployeeAttendanceStatus.checkedOut:
+        return Colors.red.shade500;
+      case EmployeeAttendanceStatus.dayOff:
+        return Colors.blue.shade500;
+      case EmployeeAttendanceStatus.absent:
+        return Colors.grey.shade400;
+      default:
+        return Colors.transparent;
+    }
+  }
 
-  static Widget _buildPlaceholder() {
+  Widget _buildPlaceholder() {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const CircleAvatar(radius: 34, backgroundColor: Colors.white24),
-        const SizedBox(height: 8),
+        const CircleAvatar(radius: 30, backgroundColor: Colors.white24),
+        const SizedBox(height: 12),
         Container(
-            height: 14,
+            height: 12,
             width: 60,
             decoration: BoxDecoration(
                 color: Colors.white24,
@@ -182,18 +216,17 @@ class _SemicircleClipper extends CustomClipper<Path> {
   Path getClip(Size size) {
     final path = Path();
     path.arcTo(
-      // Corrected: Use Rect.fromCircle which accepts a radius.
-      // This creates a bounding box for a circle centered at the bottom-middle
-      // of the container, allowing us to draw the top semi-circular arc.
       Rect.fromCircle(
         center: Offset(size.width / 2, size.height),
         radius: size.width / 2,
       ),
-      math.pi, // Start angle (180 degrees, on the left)
-      math.pi, // Sweep angle (180 degrees, drawing the top half)
+      math.pi, 
+      math.pi, 
       false,
     );
-    path.close(); // Close the path to form the semi-circle shape
+    path.lineTo(size.width, size.height);
+    path.lineTo(0, size.height);
+    path.close();
     return path;
   }
 

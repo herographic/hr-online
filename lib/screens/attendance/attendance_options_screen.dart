@@ -30,7 +30,58 @@ class AttendanceOptionsScreen extends StatefulWidget {
 }
 
 class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
+  // --- [START] MODIFIED CODE: Lifted state up ---
+  Future<Map<String, dynamic>>? _attendanceDataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshAttendanceData(); // Initial data load
+  }
+
+  /// Fetches the latest attendance data for the current employee.
+  Future<Map<String, dynamic>> _fetchAttendanceData() async {
+    if (widget.loggedInEmployee == null) return {};
+
+    final now = DateTime.now();
+    final docId =
+        '${widget.loggedInEmployee!.employeeId}_${DateFormat('yyyy-MM-dd').format(now)}';
+
+    final results = await Future.wait([
+      firestore.FirebaseFirestore.instance
+          .collection('attendance_log')
+          .doc(docId)
+          .get(),
+      firestore.FirebaseFirestore.instance.collection('work_shifts').get(),
+    ]);
+
+    final attendanceDoc = results[0] as firestore.DocumentSnapshot;
+    final workShiftsSnapshot = results[1] as firestore.QuerySnapshot;
+
+    AttendanceLog? attendanceLog;
+    if (attendanceDoc.exists) {
+      attendanceLog = AttendanceLog.fromFirestore(attendanceDoc);
+    }
+
+    final allShifts =
+        workShiftsSnapshot.docs.map((doc) => WorkShift.fromFirestore(doc)).toList();
+
+    return {
+      'attendanceLog': attendanceLog,
+      'allShifts': allShifts,
+    };
+  }
   
+  /// Triggers a UI refresh by re-fetching attendance data.
+  void _refreshAttendanceData() {
+    if (mounted) {
+      setState(() {
+        _attendanceDataFuture = _fetchAttendanceData();
+      });
+    }
+  }
+  // --- [END] MODIFIED CODE ---
+
   Future<void> _startVerification() async {
     if (widget.loggedInEmployee == null) return;
 
@@ -57,6 +108,10 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
         ),
       ),
     );
+    
+    // --- [START] MODIFIED CODE: Refresh data on return ---
+    _refreshAttendanceData();
+    // --- [END] MODIFIED CODE ---
 
     if (isVerified == true) {
       if (mounted) {
@@ -82,7 +137,12 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
       showBackButton: true,
       bodySlivers: [
         SliverToBoxAdapter(
-          child: _AttendanceInfoCard(employee: widget.loggedInEmployee),
+          // --- [START] MODIFIED CODE: Pass future to the card ---
+          child: _AttendanceInfoCard(
+            employee: widget.loggedInEmployee,
+            attendanceDataFuture: _attendanceDataFuture,
+          ),
+          // --- [END] MODIFIED CODE ---
         ),
         SliverPadding(
           padding: const EdgeInsets.all(16.0),
@@ -97,12 +157,14 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
                 icon: Icons.qr_code_scanner,
                 label: 'สแกน QR Code',
                 onTap: () {
+                  // --- [START] MODIFIED CODE: Refresh on return ---
                   Navigator.of(context).push(MaterialPageRoute(
                     builder: (context) => QRScannerScreen(
                       isUserAdmin: widget.isUserAdmin,
                       loggedInEmployee: widget.loggedInEmployee,
                     ),
-                  ));
+                  )).then((_) => _refreshAttendanceData());
+                  // --- [END] MODIFIED CODE ---
                 },
               ),
               _buildOptionButton(
@@ -116,12 +178,14 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
                 icon: Icons.location_on,
                 label: 'เช็คอินด้วย GPS',
                 onTap: () {
+                  // --- [START] MODIFIED CODE: Refresh on return ---
                   Navigator.of(context).push(MaterialPageRoute(
                     builder: (context) => GpsCheckinScreen(
                       isUserAdmin: widget.isUserAdmin,
                       loggedInEmployee: widget.loggedInEmployee,
                     ),
-                  ));
+                  )).then((_) => _refreshAttendanceData());
+                  // --- [END] MODIFIED CODE ---
                 },
               ),
               _buildOptionButton(
@@ -136,11 +200,13 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
                 label: 'ขออัพเดทเวลา',
                 onTap: () {
                   if (widget.loggedInEmployee != null) {
+                    // --- [START] MODIFIED CODE: Refresh on return ---
                     Navigator.of(context).push(MaterialPageRoute(
                       builder: (context) => TimeUpdateRequestScreen(
                         loggedInEmployee: widget.loggedInEmployee!,
                       ),
-                    ));
+                    )).then((_) => _refreshAttendanceData());
+                    // --- [END] MODIFIED CODE ---
                   }
                 },
               ),
@@ -198,39 +264,11 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
 
 class _AttendanceInfoCard extends StatelessWidget {
   final Employee? employee;
-  const _AttendanceInfoCard({this.employee});
+  // --- [START] MODIFIED CODE: Accept future from parent ---
+  final Future<Map<String, dynamic>>? attendanceDataFuture;
 
-  Future<Map<String, dynamic>> _fetchAttendanceData() async {
-    if (employee == null) return {};
-
-    final now = DateTime.now();
-    final docId =
-        '${employee!.employeeId}_${DateFormat('yyyy-MM-dd').format(now)}';
-
-    final results = await Future.wait([
-      firestore.FirebaseFirestore.instance
-          .collection('attendance_log')
-          .doc(docId)
-          .get(),
-      firestore.FirebaseFirestore.instance.collection('work_shifts').get(),
-    ]);
-
-    final attendanceDoc = results[0] as firestore.DocumentSnapshot;
-    final workShiftsSnapshot = results[1] as firestore.QuerySnapshot;
-
-    AttendanceLog? attendanceLog;
-    if (attendanceDoc.exists) {
-      attendanceLog = AttendanceLog.fromFirestore(attendanceDoc);
-    }
-
-    final allShifts =
-        workShiftsSnapshot.docs.map((doc) => WorkShift.fromFirestore(doc)).toList();
-
-    return {
-      'attendanceLog': attendanceLog,
-      'allShifts': allShifts,
-    };
-  }
+  const _AttendanceInfoCard({this.employee, this.attendanceDataFuture});
+  // --- [END] MODIFIED CODE ---
 
   @override
   Widget build(BuildContext context) {
@@ -239,7 +277,9 @@ class _AttendanceInfoCard extends StatelessWidget {
     }
 
     return FutureBuilder<Map<String, dynamic>>(
-      future: _fetchAttendanceData(),
+      // --- [START] MODIFIED CODE: Use the passed future ---
+      future: attendanceDataFuture,
+      // --- [END] MODIFIED CODE ---
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -272,7 +312,6 @@ class _AttendanceInfoCard extends StatelessWidget {
             ? timeFormat.format(log!.checkOut!.toDate())
             : '- : -';
         
-        // --- [START] NEW COLOR LOGIC ---
         Color checkInColor = Colors.white;
         Color checkOutColor = Colors.white;
 
@@ -288,7 +327,6 @@ class _AttendanceInfoCard extends StatelessWidget {
               scheduledCheckOut = scheduledCheckOut.add(const Duration(days: 1));
             }
 
-            // Check-in color logic
             if (log.checkIn != null) {
               final actualCheckIn = log.checkIn!.toDate();
               if (actualCheckIn.isAfter(scheduledCheckIn.add(const Duration(minutes: 1)))) {
@@ -298,7 +336,6 @@ class _AttendanceInfoCard extends StatelessWidget {
               }
             }
 
-            // Check-out color logic
             if (log.checkOut != null) {
               final actualCheckOut = log.checkOut!.toDate();
               if (actualCheckOut.isBefore(scheduledCheckOut)) {
@@ -311,7 +348,6 @@ class _AttendanceInfoCard extends StatelessWidget {
             // ignore parsing errors
           }
         }
-        // --- [END] NEW COLOR LOGIC ---
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -367,9 +403,7 @@ class _AttendanceInfoCard extends StatelessWidget {
     );
   }
 
-  // --- [START] MODIFIED WIDGET ---
   Widget _buildTimeDisplay(String label, String time, {Color color = Colors.white}) {
-  // --- [END] MODIFIED WIDGET ---
     return Column(
       children: [
         Text(
@@ -385,9 +419,7 @@ class _AttendanceInfoCard extends StatelessWidget {
           style: GoogleFonts.orbitron(
             fontSize: 22,
             fontWeight: FontWeight.bold,
-            // --- [START] MODIFIED CODE ---
-            color: color, // Use the passed color
-            // --- [END] MODIFIED CODE ---
+            color: color,
           ),
         ),
       ],

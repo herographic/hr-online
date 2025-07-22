@@ -65,15 +65,14 @@ class Employee {
 
   final bool isAdmin;
   final bool isDepartmentHead;
+  // --- [START] NEW FIELD ---
+  final bool isOutsource; // Flag for outsource personnel
+  // --- [END] NEW FIELD ---
 
   final Timestamp? lastSeen;
 
-  // --- [START] NEW FIELDS ---
-  /// Stores the employee's current employment status (e.g., 'ลาออก', 'โดนพักงาน').
   final String? employmentStatus;
-  /// Stores an optional note related to the employment status.
   final String? employmentStatusNote;
-  // --- [END] NEW FIELDS ---
 
   Employee({
     required this.employeeId,
@@ -102,10 +101,9 @@ class Employee {
     this.lastSeen,
     this.isAdmin = false,
     this.isDepartmentHead = false,
-    // --- [START] ADDED TO CONSTRUCTOR ---
+    this.isOutsource = false, // --- [START] ADDED TO CONSTRUCTOR ---
     this.employmentStatus,
     this.employmentStatusNote,
-    // --- [END] ADDED TO CONSTRUCTOR ---
   });
 
   String get fullName => '$firstName $lastName';
@@ -150,10 +148,9 @@ class Employee {
       lastSeen: data['lastSeen'] as Timestamp?,
       isAdmin: data['isAdmin'] ?? false,
       isDepartmentHead: data['isDepartmentHead'] ?? false,
-      // --- [START] ADDED MAPPING ---
+      isOutsource: data['isOutsource'] ?? false, // --- [START] ADDED MAPPING ---
       employmentStatus: data['employmentStatus'],
       employmentStatusNote: data['employmentStatusNote'],
-      // --- [END] ADDED MAPPING ---
     );
   }
 }

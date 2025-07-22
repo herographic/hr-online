@@ -1,3 +1,5 @@
+// lib/providers/attendance_status_provider.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,20 +8,21 @@ import 'package:hr_online/models/employee_model.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
 
-// Enum สำหรับระบุสถานะของพนักงาน
+// Enum for specifying employee attendance status
 enum EmployeeAttendanceStatus {
-  checkedIn,  // เข้างานแล้ว (กรอบเขียว)
-  checkedOut, // ออกงานแล้ว (กรอบแดง)
-  dayOff,     // เป็นวันหยุดตามตาราง (กรอบน้ำเงิน)
-  absent,     // เป็นวันทำงานแต่ยังไม่เข้างาน (กรอบเทา)
-  unknown     // ยังไม่ทราบสถานะ (Default)
+  checkedIn,  // Checked in (Green border)
+  onBreak,    // On break (Orange border)
+  checkedOut, // Checked out (Red border)
+  dayOff,     // Scheduled day off (Blue border)
+  absent,     // Working day but not checked in (Gray border)
+  unknown     // Status not yet known (Default)
 }
 
 class AttendanceStatusProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   StreamSubscription? _attendanceSubscription;
   
-  // Map สำหรับเก็บสถานะของพนักงานทุกคน Key คือ employeeId
+  // Map to store the status of all employees, with employeeId as the key
   Map<String, EmployeeAttendanceStatus> _statuses = {};
   Map<String, Employee> _allEmployees = {};
 
@@ -34,21 +37,21 @@ class AttendanceStatusProvider with ChangeNotifier {
   Future<void> _initialize() async {
     if (_isInitialized) return;
     
-    // 1. โหลดข้อมูลพนักงานทั้งหมดเพื่อเช็คตารางวันหยุด
+    // 1. Load all employee data to check their holiday schedule
     final employeeSnapshot = await _firestore.collection('users').get();
     _allEmployees = {
       for (var doc in employeeSnapshot.docs)
         doc.id: Employee.fromFirestore(doc)
     };
     
-    // 2. เริ่มติดตามข้อมูลการลงเวลาของวันนี้
+    // 2. Start tracking today's attendance data
     listenToAttendanceForDate(DateTime.now());
     _isInitialized = true;
   }
 
-  // ฟังก์ชันสำหรับเริ่มติดตามข้อมูลการลงเวลา ณ วันที่ที่กำหนด
+  // Function to start tracking attendance data for a specific date
   void listenToAttendanceForDate(DateTime date) {
-    // หยุดการติดตามของเก่าก่อน
+    // Stop previous tracking first
     _attendanceSubscription?.cancel();
 
     final startOfDay = DateTime(date.year, date.month, date.day);
@@ -68,34 +71,42 @@ class AttendanceStatusProvider with ChangeNotifier {
     final newStatuses = <String, EmployeeAttendanceStatus>{};
     final dayOfWeek = DateFormat('EEEE').format(date); // e.g., "Monday"
 
-    // ดึงข้อมูล log ล่าสุดของแต่ละคน
+    // Get the latest log for each person
     final attendanceLogs = docs.map((doc) => AttendanceLog.fromFirestore(doc)).toList();
     final latestLogsByEmployee = groupBy(attendanceLogs, (log) => log.employeeId);
 
-    // วนลูปพนักงานทุกคนเพื่อกำหนดสถานะเริ่มต้น
+    // Loop through all employees to set their initial status
     _allEmployees.forEach((employeeId, employee) {
       final workShiftId = employee.dailyWorkShifts[dayOfWeek];
       final isWorkDay = workShiftId != null && workShiftId.isNotEmpty;
 
       if (!isWorkDay) {
-        newStatuses[employeeId] = EmployeeAttendanceStatus.dayOff; // วันหยุด
+        newStatuses[employeeId] = EmployeeAttendanceStatus.dayOff; // Holiday
       } else {
-        newStatuses[employeeId] = EmployeeAttendanceStatus.absent; // วันทำงาน แต่ยังไม่มา
+        newStatuses[employeeId] = EmployeeAttendanceStatus.absent; // Working day, but not yet arrived
       }
     });
 
-    // อัปเดตสถานะจาก log ที่มี
+    // Update status from existing logs
     latestLogsByEmployee.forEach((employeeId, logs) {
-      final latestLog = logs.first; // Stream is ordered, so first is latest
+      // Assuming logs are ordered by timestamp, the first one is the latest
+      final latestLog = logs.first; 
+      
+      // --- [START] MODIFIED STATUS LOGIC ---
       if (latestLog.checkOut != null) {
-        newStatuses[employeeId] = EmployeeAttendanceStatus.checkedOut;
+        newStatuses[employeeId] = EmployeeAttendanceStatus.checkedOut; // Checked out
+      } else if (latestLog.breakIn != null) {
+        newStatuses[employeeId] = EmployeeAttendanceStatus.checkedIn; // Returned from break, so back to checked-in
+      } else if (latestLog.breakOut != null) {
+        newStatuses[employeeId] = EmployeeAttendanceStatus.onBreak; // On break
       } else if (latestLog.checkIn != null) {
-        newStatuses[employeeId] = EmployeeAttendanceStatus.checkedIn;
+        newStatuses[employeeId] = EmployeeAttendanceStatus.checkedIn; // Checked in
       }
+      // --- [END] MODIFIED STATUS LOGIC ---
     });
 
     _statuses = newStatuses;
-    notifyListeners(); // แจ้งเตือน Widget ที่ใช้งาน Provider นี้ให้ Rebuild
+    notifyListeners(); // Notify widgets using this Provider to rebuild
   }
 
   @override

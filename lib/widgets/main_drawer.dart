@@ -1,8 +1,7 @@
-// hr_online/lib/widgets/main_drawer.dart
+// lib/widgets/main_drawer.dart
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hr_online/models/employee_model.dart';
 import 'package:hr_online/providers/attendance_status_provider.dart';
@@ -11,6 +10,7 @@ import 'package:hr_online/screens/admin/compensation_history_screen.dart';
 import 'package:hr_online/screens/admin/edit_global_announcement_screen.dart';
 import 'package:hr_online/screens/admin/employee_evaluation_list_screen.dart';
 import 'package:hr_online/screens/admin/job_posting_management_screen.dart';
+import 'package:hr_online/screens/admin/outsource_management_screen.dart';
 import 'package:hr_online/screens/admin/quiz_management_screen.dart';
 import 'package:hr_online/screens/admin/time_update_approval_screen.dart';
 import 'package:hr_online/screens/admin/view_application_detail_screen.dart';
@@ -24,8 +24,9 @@ import 'package:hr_online/screens/leave/leave_approval_list_screen.dart';
 import 'package:hr_online/screens/leave/leave_request_list_screen.dart';
 import 'package:hr_online/screens/login_screen.dart';
 import 'package:hr_online/screens/master_settings_screen.dart';
-import 'package:hr_online/screens/placeholder_screen.dart'; // Import PlaceholderScreen
+import 'package:hr_online/screens/my_qr_code_screen.dart';
 import 'package:hr_online/screens/profile_screen.dart';
+import 'package:hr_online/screens/ranking_screen.dart';
 import 'package:hr_online/screens/upload_employee_screen.dart';
 import 'package:hr_online/screens/workforce_allocation_screen.dart';
 import 'package:hr_online/widgets/employee_status_avatar.dart';
@@ -44,433 +45,277 @@ class MainDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isApprover =
-        isUserAdmin || (loggedInEmployee?.isDepartmentHead ?? false);
-
     return Drawer(
       child: Column(
         children: [
           _buildDrawerHeader(context),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(8.0),
+              padding: EdgeInsets.zero,
               children: [
                 if (isUserAdmin) ...[
-                  _buildSectionTitle('สำหรับผู้ดูแลระบบ'),
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.campaign_outlined,
-                    title: 'ประกาศ (หน้าแรก)',
-                    onTap: () => _navigateTo(
-                        context, const EditGlobalAnnouncementScreen()),
-                  ),
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.edit_calendar_outlined,
-                    title: 'แก้ไขการบันทึกเวลา',
-                    onTap: () {
-                       if (loggedInEmployee != null) {
-                        _navigateTo(
-                            context,
-                            TimeUpdateApprovalScreen(
-                                loggedInEmployee: loggedInEmployee!));
-                      }
-                    },
-                  ),
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.history_toggle_off,
-                    title: 'ประวัติทำงานชดเชย',
-                    onTap: () =>
-                        _navigateTo(context, const CompensationHistoryScreen()),
-                  ),
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.people_alt_outlined,
-                    title: 'พนักงานทั้งหมด',
-                    onTap: () => _navigateTo(
-                        context,
-                        AllEmployeesScreen(
-                            isUserAdmin: isUserAdmin,
-                            loggedInEmployee: loggedInEmployee)),
-                  ),
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.groups_3_outlined,
-                    title: 'จัดสรรกำลังคน',
-                    onTap: () => _navigateTo(
-                        context,
-                        WorkforceAllocationScreen(
-                            isUserAdmin: isUserAdmin,
-                            loggedInEmployee: loggedInEmployee)),
-                  ),
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.settings_applications_outlined,
-                    title: 'จัดการข้อมูลหลัก',
-                    onTap: () => _navigateTo(
-                        context,
-                        MasterSettingsScreen(
-                            isUserAdmin: isUserAdmin,
-                            loggedInEmployee: loggedInEmployee)),
-                  ),
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.person_add_alt_1_outlined,
-                    title: 'เพิ่มพนักงานใหม่',
-                    onTap: () =>
-                        _navigateTo(context, const AddEmployeeScreen()),
-                  ),
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.quiz_outlined,
-                    title: 'ออกแบบทดสอบ',
-                    onTap: () =>
-                        _navigateTo(context, const QuizManagementScreen()),
-                  ),
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.person_search_outlined,
-                    title: 'ประเมินพนักงาน',
-                    onTap: () => _navigateTo(
-                        context, const EmployeeEvaluationListScreen()),
-                  ),
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.upload_file_outlined,
-                    title: 'อัปโหลดข้อมูล',
-                    onTap: () => _navigateTo(
-                        context,
-                        UploadEmployeeScreen(
-                            isUserAdmin: isUserAdmin,
-                            loggedInEmployee: loggedInEmployee)),
-                  ),
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.description_outlined,
-                    title: 'ดูใบสมัครงาน',
-                    onTap: () =>
-                        _navigateTo(context, const ViewApplicationsScreen()),
-                  ),
-                  const Divider(height: 24, thickness: 0.5),
+                  ..._buildAdminOnlyMenuItems(context),
+                  ..._buildDepartmentHeadMenuItems(context),
+                  const Divider(),
+                  ..._buildEmployeeAndOutsourceMenuItems(context, loggedInEmployee),
+                ] else if (loggedInEmployee != null) ...[
+                  ..._buildEmployeeAndOutsourceMenuItems(context, loggedInEmployee!),
+                  if (loggedInEmployee!.isDepartmentHead) ...[
+                    ..._buildDepartmentHeadMenuItems(context),
+                  ]
                 ],
-                if (isApprover) ...[
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.post_add_outlined,
-                    title: 'โพสต์รับสมัครงาน',
-                    onTap: () => _navigateTo(
-                        context,
-                        JobPostingManagementScreen(
-                            isUserAdmin: isUserAdmin,
-                            loggedInEmployee: loggedInEmployee)),
-                  ),
-                ],
-                if (isApprover) ...[
-                  _buildDrawerItem(
-                    context: context,
-                    icon: Icons.notification_important_outlined,
-                    title: 'แจ้งเตือนการลางาน',
-                    onTap: () {
-                      if (loggedInEmployee != null) {
-                        _navigateTo(
-                            context,
-                            LeaveApprovalListScreen(
-                                loggedInEmployee: loggedInEmployee!,
-                                isUserAdmin: isUserAdmin));
-                      }
-                    },
-                  ),
-                ],
-                _buildSectionTitle('เมนูทั่วไป'),
-                _buildDrawerItem(
-                  context: context,
-                  icon: Icons.person_outline,
-                  title: 'ข้อมูลส่วนตัว',
-                  onTap: () {
-                    if (loggedInEmployee != null) {
-                      _navigateTo(
-                          context, ProfileScreen(employee: loggedInEmployee!));
-                    }
-                  },
-                ),
-                _buildDrawerItem(
-                  context: context,
-                  icon: Icons.more_time_outlined,
-                  title: 'ชดเชยเวลางาน',
-                  onTap: () => _navigateTo(context, CompensationCheckInScreen(isUserAdmin: isUserAdmin, loggedInEmployee: loggedInEmployee)),
-                ),
-                _buildDrawerItem(
-                  context: context,
-                  icon: Icons.leaderboard_outlined,
-                  title: 'อันดับคะแนน (ส่งงาน)',
-                  onTap: () => _navigateTo(
-                      context,
-                      AttendanceAwardScreen(
-                          isUserAdmin: isUserAdmin,
-                          loggedInEmployee: loggedInEmployee)),
-                ),
-                _buildDrawerItem(
-                  context: context,
-                  icon: Icons.military_tech_outlined,
-                  title: 'อันดับแบบทดสอบ',
-                  onTap: () => _navigateTo(context, const QuizRankingScreen()),
-                ),
-                _buildDrawerItem(
-                    context: context,
-                    icon: Icons.checklist_rtl_outlined,
-                    title: 'ทำแบบทดสอบ',
-                    onTap: () {
-                      if (loggedInEmployee != null) {
-                        _navigateTo(context,
-                            QuizListScreen(loggedInEmployee: loggedInEmployee!));
-                      }
-                    }),
-                _buildDrawerItem(
-                  context: context,
-                  icon: Icons.emoji_events_outlined,
-                  title: 'อันดับของฉัน',
-                  onTap: () {
-                    if (loggedInEmployee != null) {
-                      _navigateTo(
-                          context,
-                          MyQuizRankingsScreen(
-                              loggedInEmployee: loggedInEmployee!));
-                    }
-                  },
-                ),
-                _buildDrawerItem(
-                  context: context,
-                  icon: Icons.calendar_today_outlined,
-                  title: 'แจ้งลางาน',
-                  onTap: () {
-                    if (loggedInEmployee != null) {
-                      _navigateTo(
-                          context,
-                          LeaveRequestListScreen(
-                              loggedInEmployee: loggedInEmployee!,
-                              isUserAdmin: isUserAdmin));
-                    }
-                  },
-                ),
-                // --- [START] ADDED PAYSLIP MENU ITEM ---
-                _buildDrawerItem(
-                  context: context,
-                  icon: Icons.receipt_long_outlined, // Icon for payslip
-                  title: 'สลิปเงินเดือน',
-                  onTap: () {
-                    // Placeholder navigation to a new screen for payslip
-                    _navigateTo(context, const PlaceholderScreen(title: 'สลิปเงินเดือน'));
-                  },
-                ),
-                // --- [END] ADDED PAYSLIP MENU ITEM ---
               ],
             ),
           ),
-          _buildLogoutButton(context),
         ],
       ),
     );
   }
 
-  void _navigateTo(BuildContext context, Widget screen) {
-    Navigator.of(context).pop(); // Close drawer first
-    Navigator.of(context).push(MaterialPageRoute(builder: (ctx) => screen));
-  }
-
+  /// Builds the header section of the drawer with custom layout.
   Widget _buildDrawerHeader(BuildContext context) {
-    if (loggedInEmployee == null && !isUserAdmin) {
-      return const SizedBox.shrink();
-    }
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-          16, MediaQuery.of(context).padding.top + 16, 16, 16),
-      decoration: BoxDecoration(
+    final statusProvider = Provider.of<AttendanceStatusProvider>(context, listen: false);
+    final status = isUserAdmin
+        ? EmployeeAttendanceStatus.unknown
+        : statusProvider.statuses[loggedInEmployee?.employeeId] ?? EmployeeAttendanceStatus.unknown;
+    
+    final statusInfo = _getStatusTextAndColor(status);
+    
+    // --- [START] RESTORED POSITION/DEPARTMENT TEXT ---
+    final positionNames = loggedInEmployee?.positions.isNotEmpty ?? false
+        ? loggedInEmployee!.positions.map((p) => p['name'] ?? '').join(', ')
+        : 'ยังไม่มีตำแหน่ง';
+    // --- [END] RESTORED POSITION/DEPARTMENT TEXT ---
+
+    return DrawerHeader(
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Theme.of(context).primaryColor, Colors.blue.shade700],
+          colors: [Color(0xFF00c6ff), Color(0xFF0072ff)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               EmployeeStatusAvatar(
-                employeeId: loggedInEmployee?.employeeId ?? 'admin',
+                employeeId: loggedInEmployee?.employeeId ?? '',
                 imageUrl: loggedInEmployee?.profileImageUrl,
                 gender: loggedInEmployee?.gender,
-                radius: 35,
+                radius: 28,
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       loggedInEmployee?.fullName ?? 'ผู้ดูแลระบบ',
-                      style: GoogleFonts.anuphan(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: Colors.white),
+                      style: GoogleFonts.anuphan(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    // --- [START] RESTORED POSITION/DEPARTMENT TEXT ---
                     Text(
-                      'ID: ${loggedInEmployee?.employeeId ?? 'admin'}',
-                      style: GoogleFonts.anuphan(
-                          color: Colors.white.withOpacity(0.9)),
+                      isUserAdmin ? 'Admin' : '$positionNames (${loggedInEmployee?.employeeId ?? ''})',
+                      style: GoogleFonts.anuphan(color: Colors.white.withOpacity(0.9)),
+                       overflow: TextOverflow.ellipsis,
                     ),
+                    // --- [END] RESTORED POSITION/DEPARTMENT TEXT ---
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          const Divider(color: Colors.white24),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: FutureBuilder<String>(
-                  future: _getDeptAndPosition(loggedInEmployee),
-                  builder: (context, snapshot) {
-                    return Text(
-                      snapshot.data ?? '...',
-                      style:
-                          GoogleFonts.anuphan(color: Colors.white, fontSize: 13),
-                      overflow: TextOverflow.ellipsis,
-                    );
-                  },
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.only(left: 4.0),
+            child: Row(
+              children: [
+                Icon(Icons.circle, color: statusInfo['color'] as Color, size: 12),
+                const SizedBox(width: 8),
+                Text(
+                  statusInfo['text'] as String,
+                  style: GoogleFonts.anuphan(color: Colors.white, fontWeight: FontWeight.w600),
                 ),
-              ),
-              Consumer<AttendanceStatusProvider>(
-                builder: (context, provider, child) {
-                  final status =
-                      provider.statuses[loggedInEmployee?.employeeId] ??
-                          EmployeeAttendanceStatus.unknown;
-                  final isOnline = status == EmployeeAttendanceStatus.checkedIn;
-                  return Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                            color: isOnline
-                                ? Colors.lightGreenAccent
-                                : Colors.grey[400],
-                            shape: BoxShape.circle,
-                            border:
-                                Border.all(color: Colors.white, width: 1.5)),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        isOnline ? 'Online' : 'Offline',
-                        style: GoogleFonts.anuphan(
-                            color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.logout, color: Colors.white, size: 22),
+                  onPressed: () => _handleLogout(context),
+                  tooltip: 'ออกจากระบบ',
+                  splashRadius: 20,
+                ),
+              ],
+            ),
+          )
         ],
       ),
     );
   }
 
-  Future<String> _getDeptAndPosition(Employee? employee) async {
-    if (employee == null) return 'สถานะ: Admin';
-    if (employee.departmentCode.isEmpty) return 'ไม่ระบุแผนก/ตำแหน่ง';
-    try {
-      final deptDoc = await FirebaseFirestore.instance
-          .collection('departments')
-          .doc(employee.departmentCode)
-          .get();
-      final deptName =
-          deptDoc.exists ? (deptDoc.data()!['name'] ?? 'N/A') : 'N/A';
-      final posNames = employee.positions.map((p) => p['name'] ?? '').join(', ');
-      return '$deptName / $posNames';
-    } catch (e) {
-      return 'ไม่สามารถโหลดข้อมูลได้';
-    }
+  /// Builds menu items visible to regular employees, outsource staff, and Admins.
+  List<Widget> _buildEmployeeAndOutsourceMenuItems(BuildContext context, Employee? employee) {
+    final bool isEmployeeView = employee != null;
+
+    return [
+      _buildSectionHeader('เมนูทั่วไป'),
+      _buildDrawerItem(context, 'ข้อมูลส่วนตัว', Icons.person,
+          isEmployeeView ? () => _navigateTo(context, ProfileScreen(employee: employee)) : null),
+      if (isEmployeeView && employee.isDepartmentHead)
+        _buildDrawerItem(context, 'QR Code ของฉัน', Icons.qr_code_2,
+            () => _navigateTo(context, MyQRCodeScreen(loggedInEmployee: employee))),
+      _buildDrawerItem(context, 'รายการลางาน', Icons.event_note,
+          isEmployeeView ? () => _navigateTo(context, LeaveRequestListScreen(loggedInEmployee: employee, isUserAdmin: isUserAdmin)) : null),
+      _buildDrawerItem(context, 'แบบทดสอบ', Icons.quiz_outlined,
+          isEmployeeView ? () => _navigateTo(context, QuizListScreen(loggedInEmployee: employee)) : null),
+      _buildDrawerItem(context, 'อันดับคะแนน', Icons.leaderboard,
+          () => _navigateTo(context, RankingScreen(isUserAdmin: isUserAdmin, loggedInEmployee: loggedInEmployee))),
+      _buildDrawerItem(context, 'อันดับ (แบบทดสอบ)', Icons.emoji_events,
+          () => _navigateTo(context, const QuizRankingScreen())),
+      _buildDrawerItem(context, 'อันดับของฉัน', Icons.military_tech,
+          isEmployeeView ? () => _navigateTo(context, MyQuizRankingsScreen(loggedInEmployee: employee)) : null),
+      _buildDrawerItem(context, 'ทำงานชดเชย', Icons.more_time_outlined,
+          isEmployeeView ? () => _navigateTo(context, CompensationCheckInScreen(isUserAdmin: isUserAdmin, loggedInEmployee: loggedInEmployee)) : null),
+    ];
+  }
+  
+  /// Builds menu items visible only to Department Heads (and Admins).
+  List<Widget> _buildDepartmentHeadMenuItems(BuildContext context) {
+    return [
+       const Divider(),
+      _buildSectionHeader('สำหรับหัวหน้าแผนก'),
+       _buildDrawerItem(context, 'อนุมัติการลา', Icons.event_available,
+          () => _navigateTo(context, LeaveApprovalListScreen(loggedInEmployee: loggedInEmployee!, isUserAdmin: isUserAdmin))),
+    ];
   }
 
-  Widget _buildSectionTitle(String title) {
+  /// Builds a list of menu items visible only to Admin users.
+  List<Widget> _buildAdminOnlyMenuItems(BuildContext context) {
+    return [
+      _buildSectionHeader('สำหรับผู้ดูแลระบบ'),
+      _buildDrawerItem(context, 'จัดการข้อมูลหลัก', Icons.settings_applications,
+          () => _navigateTo(context, MasterSettingsScreen(isUserAdmin: isUserAdmin, loggedInEmployee: loggedInEmployee))),
+      _buildDrawerItem(context, 'จัดสรรกำลังคน', Icons.groups,
+          () => _navigateTo(context, WorkforceAllocationScreen(isUserAdmin: isUserAdmin, loggedInEmployee: loggedInEmployee))),
+      _buildDrawerItem(context, 'OutSource', Icons.engineering,
+          () => _navigateTo(context, OutsourceManagementScreen(loggedInEmployee: loggedInEmployee!))),
+      _buildDrawerItem(context, 'พนักงานทั้งหมด', Icons.people,
+          () => _navigateTo(context, AllEmployeesScreen(isUserAdmin: isUserAdmin, loggedInEmployee: loggedInEmployee))),
+      _buildDrawerItem(context, 'เพิ่มพนักงาน', Icons.person_add,
+          () => _navigateTo(context, const AddEmployeeScreen())),
+      _buildDrawerItem(context, 'อัปโหลดข้อมูล', Icons.upload_file,
+          () => _navigateTo(context, UploadEmployeeScreen(isUserAdmin: isUserAdmin, loggedInEmployee: loggedInEmployee))),
+      _buildDrawerItem(context, 'อนุมัติแก้ไขเวลา', Icons.history_toggle_off,
+          () => _navigateTo(context, TimeUpdateApprovalScreen(loggedInEmployee: loggedInEmployee!))),
+      const Divider(),
+      _buildSectionHeader('การสรรหาและประเมิน'),
+      _buildDrawerItem(context, 'ข้อมูลผู้สมัครงาน', Icons.description,
+          () => _navigateTo(context, const ViewApplicationsScreen())),
+      _buildDrawerItem(context, 'ประกาศรับสมัครงาน', Icons.article,
+          () => _navigateTo(context, JobPostingManagementScreen(isUserAdmin: isUserAdmin, loggedInEmployee: loggedInEmployee))),
+      _buildDrawerItem(context, 'ออกแบบทดสอบ', Icons.quiz,
+          () => _navigateTo(context, const QuizManagementScreen())),
+      _buildDrawerItem(context, 'ประเมินพนักงาน', Icons.star_rate,
+          () => _navigateTo(context, const EmployeeEvaluationListScreen())),
+      const Divider(),
+      _buildSectionHeader('อื่น ๆ'),
+      _buildDrawerItem(context, 'จัดการประกาศ', Icons.campaign,
+          () => _navigateTo(context, const EditGlobalAnnouncementScreen())),
+      _buildDrawerItem(context, 'ประวัติทำงานชดเชย', Icons.more_time,
+          () => _navigateTo(context, const CompensationHistoryScreen())),
+    ];
+  }
+
+  /// Helper to create a section header in the drawer.
+  Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Text(
-        title.toUpperCase(),
+        title,
         style: GoogleFonts.anuphan(
-          color: Colors.grey.shade700,
-          fontWeight: FontWeight.bold,
-          fontSize: 12,
-          letterSpacing: 0.5,
-        ),
+            fontWeight: FontWeight.bold,
+            color: Colors.grey.shade600,
+            fontSize: 14),
       ),
     );
   }
 
-  Widget _buildDrawerItem({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
+  /// Helper to create a standard drawer list item.
+  Widget _buildDrawerItem(
+      BuildContext context, String title, IconData icon, VoidCallback? onTap) {
     return ListTile(
-      leading: Icon(icon, color: Colors.grey.shade800),
-      title: Text(title, style: GoogleFonts.anuphan(fontWeight: FontWeight.w500)),
-      onTap: onTap,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      dense: true,
+      leading: Icon(icon, color: onTap != null ? Colors.grey.shade700 : Colors.grey.shade400),
+      title: Text(title, style: GoogleFonts.anuphan(color: onTap != null ? Colors.black87 : Colors.grey.shade500)),
+      onTap: onTap == null ? null : () {
+        Navigator.pop(context); // Close the drawer first
+        onTap();
+      },
     );
   }
 
-  Widget _buildLogoutButton(BuildContext context) {
-    return SafeArea(
-      child: ListTile(
-        leading: const Icon(Icons.exit_to_app, color: Colors.redAccent),
-        title: Text('ออกจากระบบ',
-            style: GoogleFonts.anuphan(
-                color: Colors.redAccent, fontWeight: FontWeight.bold)),
-        onTap: () async {
-          final confirm = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('ยืนยันการออกจากระบบ'),
-              content: const Text('คุณต้องการออกจากระบบใช่หรือไม่?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('ยกเลิก'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child:
-                      const Text('ยืนยัน', style: TextStyle(color: Colors.red)),
-                ),
-              ],
-            ),
-          );
+  /// Helper to navigate to a new screen.
+  void _navigateTo(BuildContext context, Widget screen) {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
+  }
 
-          if (confirm == true) {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.remove('loggedInUserId');
-            await FirebaseAuth.instance.signOut();
-            try {
-              await FirebaseAuth.instance.signInAnonymously();
-            } catch (e) {
-              debugPrint("Error signing in anonymously after logout: $e");
-            }
-            if (!context.mounted) return;
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
-              (Route<dynamic> route) => false,
-            );
-          }
-        },
+  /// Handles the entire logout process.
+  void _handleLogout(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ยืนยันการออกจากระบบ'),
+        content: const Text('คุณต้องการออกจากระบบใช่หรือไม่?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('ยกเลิก'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('ยืนยัน', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
+
+    if (confirm == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('loggedInUserId');
+      await FirebaseAuth.instance.signOut();
+      try {
+        await FirebaseAuth.instance.signInAnonymously();
+      } catch (e) {
+        debugPrint("Error signing in anonymously after logout: $e");
+      }
+      if (!context.mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (Route<dynamic> route) => false,
+      );
+    }
+  }
+
+  /// Returns status text and color for the header.
+  Map<String, dynamic> _getStatusTextAndColor(EmployeeAttendanceStatus status) {
+    switch (status) {
+      case EmployeeAttendanceStatus.checkedIn:
+        return {'text': 'Online', 'color': Colors.greenAccent};
+      case EmployeeAttendanceStatus.onBreak:
+        return {'text': 'กำลังพัก', 'color': Colors.orangeAccent};
+      case EmployeeAttendanceStatus.checkedOut:
+        return {'text': 'Offline', 'color': Colors.redAccent};
+      case EmployeeAttendanceStatus.dayOff:
+        return {'text': 'วันหยุด', 'color': Colors.lightBlueAccent};
+      case EmployeeAttendanceStatus.absent:
+      case EmployeeAttendanceStatus.unknown:
+      default:
+        return {'text': 'Offline', 'color': Colors.grey.shade400};
+    }
   }
 }
