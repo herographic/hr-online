@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "762935714552",
+    "firebase_url": "https://hronline-59dc8-default-rtdb.firebaseio.com",
+    "project_id": "hronline-59dc8",
+    "storage_bucket": "hronline-59dc8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:762935714552:android:78ac2ed8ccb4e6f8e7d10d",
+        "android_client_info": {
+          "package_name": "com.example.hr_online"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGuVNrRI-EnKYfArT9q56Ma-2SgZ9-oLQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

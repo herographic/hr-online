@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "hronline-59dc8"
+  },
+  "targets": {
+    "hronline-59dc8": {
+      "hosting": {
+        "hronline": [
+          "hronline-59dc8"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
