@@ -2,7 +2,23 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// QuestionType Enum remains the same
+// --- [START] NEW CODE ---
+/// Enum to define the type of quiz.
+enum QuizType {
+  standard, // Traditional quiz taken individually.
+  gameShow, // Real-time competitive quiz.
+}
+
+/// Helper to convert string from Firestore to QuizType enum.
+QuizType quizTypeFromString(String? typeString) {
+  if (typeString == 'gameShow') {
+    return QuizType.gameShow;
+  }
+  return QuizType.standard;
+}
+// --- [END] NEW CODE ---
+
+
 enum QuestionType {
   singleChoice,
   multipleChoice,
@@ -20,7 +36,6 @@ enum QuestionType {
   }
 }
 
-// Question Model remains the same
 class Question {
   final String id;
   final String text;
@@ -61,7 +76,6 @@ class Question {
   }
 }
 
-// Quiz Model remains the same
 class Quiz {
   final String id;
   final String title;
@@ -72,6 +86,10 @@ class Quiz {
   final Timestamp createdAt;
   final bool isActive;
   final List<Question> questions;
+  // --- [START] MODIFIED CODE ---
+  final QuizType quizType; // Added quiz type
+  // --- [END] MODIFIED CODE ---
+
 
   Quiz({
     required this.id,
@@ -83,6 +101,7 @@ class Quiz {
     required this.createdAt,
     this.isActive = true,
     this.questions = const [],
+    this.quizType = QuizType.standard, // Default to standard
   });
 
   factory Quiz.fromFirestore(DocumentSnapshot doc, List<Question> questions) {
@@ -97,6 +116,9 @@ class Quiz {
       createdAt: data['createdAt'] ?? Timestamp.now(),
       isActive: data['isActive'] ?? true,
       questions: questions,
+      // --- [START] MODIFIED CODE ---
+      quizType: quizTypeFromString(data['quizType']), // Map from string
+      // --- [END] MODIFIED CODE ---
     );
   }
 
@@ -109,11 +131,13 @@ class Quiz {
       'authorId': authorId,
       'createdAt': createdAt,
       'isActive': isActive,
+      // --- [START] MODIFIED CODE ---
+      'quizType': quizType.name, // Save enum name as string
+      // --- [END] MODIFIED CODE ---
     };
   }
 }
 
-// QuizAssignment Model
 class QuizAssignment {
   final String id;
   final String quizId;
@@ -122,9 +146,7 @@ class QuizAssignment {
   final int? score;
   final Timestamp? assignedAt;
   final Timestamp? completedAt;
-  // --- [START] NEW FIELD ---
-  final int? durationInSeconds; // เวลาที่ใช้ทำ (วินาที)
-  // --- [END] NEW FIELD ---
+  final int? durationInSeconds; 
 
   QuizAssignment({
     required this.id,
@@ -134,7 +156,7 @@ class QuizAssignment {
     this.score,
     this.assignedAt,
     this.completedAt,
-    this.durationInSeconds, // <-- ADDED
+    this.durationInSeconds,
   });
 
    factory QuizAssignment.fromFirestore(DocumentSnapshot doc) {
@@ -147,7 +169,7 @@ class QuizAssignment {
       score: data['score'],
       assignedAt: data['assignedAt'],
       completedAt: data['completedAt'],
-      durationInSeconds: data['durationInSeconds'], // <-- ADDED
+      durationInSeconds: data['durationInSeconds'],
     );
   }
 
@@ -159,7 +181,7 @@ class QuizAssignment {
       'score': score,
       'assignedAt': assignedAt ?? FieldValue.serverTimestamp(),
       'completedAt': completedAt,
-      'durationInSeconds': durationInSeconds, // <-- ADDED
+      'durationInSeconds': durationInSeconds,
     };
   }
 }

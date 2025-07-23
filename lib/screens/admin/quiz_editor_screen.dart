@@ -42,23 +42,27 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
   String? _selectedPositionId;
   bool _isActive = true;
   List<Question> _questions = [];
+  // --- [START] NEW STATE VARIABLE ---
+  QuizType _quizType = QuizType.standard;
+  // --- [END] NEW STATE VARIABLE ---
+
 
   // Data for dropdowns
   List<Department> _departments = [];
 
-  // --- [START] NEW STATE: For assignment results ---
   Future<List<_AssignmentResult>>? _assignmentResultsFuture;
-  // --- [END] NEW STATE ---
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    // --- [START] MODIFIED CODE ---
+    // Adjust TabController length based on quiz type
+    _tabController = TabController(length: _quizType == QuizType.standard ? 2 : 1, vsync: this);
+    // --- [END] MODIFIED CODE ---
     _titleController = TextEditingController();
     _descriptionController = TextEditingController();
     _loadInitialData();
 
-    // --- [START] NEW LOGIC: Trigger fetching results when tab changes ---
     _tabController.addListener(() {
       if (_tabController.index == 1 && widget.quizId != null) {
         setState(() {
@@ -66,7 +70,6 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
         });
       }
     });
-    // --- [END] NEW LOGIC ---
   }
 
   @override
@@ -78,10 +81,8 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
   }
 
   Future<void> _loadInitialData() async {
-    // Load departments and positions for dropdowns
     final deptSnapshot = await FirebaseFirestore.instance.collection('departments').orderBy('name').get();
     _departments = deptSnapshot.docs.map((doc) => Department.fromFirestore(doc)).toList();
-
 
     if (widget.quizId != null) {
       final quizDoc = await FirebaseFirestore.instance.collection('quizzes').doc(widget.quizId).get();
@@ -94,12 +95,18 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
         _selectedPositionId = data['positionId'];
         _isActive = data['isActive'] ?? true;
         _questions = questionsSnapshot.docs.map((doc) => Question.fromFirestore(doc)).toList();
+        // --- [START] NEW CODE ---
+        _quizType = quizTypeFromString(data['quizType']);
+        // Rebuild TabController if it's a Game Show
+        if (_quizType == QuizType.gameShow) {
+          _tabController = TabController(length: 1, vsync: this);
+        }
+        // --- [END] NEW CODE ---
       }
     }
     if (mounted) setState(() => _isLoading = false);
   }
 
-  // --- [START] NEW METHOD: Fetch and combine assignment/employee data ---
   Future<List<_AssignmentResult>> _fetchAssignmentResults() async {
     if (widget.quizId == null) return [];
     
@@ -123,23 +130,25 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
     }
     return results;
   }
-  // --- [END] NEW METHOD ---
 
   Future<void> _saveQuiz() async {
     if (!_formKey.currentState!.validate()) return;
     
     setState(() => _isSaving = true);
 
-
+    // --- [START] MODIFIED CODE ---
+    // Add quizType to the data being saved
     final quizData = {
       'title': _titleController.text,
       'description': _descriptionController.text,
       'departmentId': _selectedDepartmentId,
       'positionId': _selectedPositionId,
       'isActive': _isActive,
+      'quizType': _quizType.name, // Save the enum's name
       'authorId': 'admin', 
       'createdAt': widget.quizId == null ? FieldValue.serverTimestamp() : (await FirebaseFirestore.instance.collection('quizzes').doc(widget.quizId!).get()).data()?['createdAt'],
     };
+    // --- [END] MODIFIED CODE ---
 
     try {
       DocumentReference quizRef;
@@ -167,6 +176,7 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
 
       if(mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('บันทึกแบบทดสอบสำเร็จ'), backgroundColor: Colors.green));
+        Navigator.of(context).pop(); // Go back after saving
       }
     } catch (e) {
       if(mounted) {
@@ -209,9 +219,10 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
         ],
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'ตั้งค่า', icon: Icon(Icons.edit_document)),
-            Tab(text: 'มอบหมาย & ผลลัพธ์', icon: Icon(Icons.assignment_ind_outlined)),
+          tabs: [
+            const Tab(text: 'ตั้งค่า', icon: Icon(Icons.edit_document)),
+            if (_quizType == QuizType.standard)
+              const Tab(text: 'มอบหมาย & ผลลัพธ์', icon: Icon(Icons.assignment_ind_outlined)),
           ],
         ),
       ),
@@ -221,7 +232,7 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
               controller: _tabController,
               children: [
                 _buildSettingsTab(),
-                _buildAssignmentTab(),
+                if (_quizType == QuizType.standard) _buildAssignmentTab(),
               ],
             ),
     );
@@ -234,6 +245,28 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
         padding: const EdgeInsets.all(16.0),
         children: [
           _buildSectionHeader('ข้อมูลทั่วไป'),
+          // --- [START] NEW WIDGET: Quiz Type Selector ---
+          if (widget.quizId == null) ...[ // Only allow changing type on creation
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: SegmentedButton<QuizType>(
+                segments: const <ButtonSegment<QuizType>>[
+                  ButtonSegment<QuizType>(value: QuizType.standard, label: Text('แบบทดสอบปกติ'), icon: Icon(Icons.description)),
+                  ButtonSegment<QuizType>(value: QuizType.gameShow, label: Text('เกมโชว์'), icon: Icon(Icons.videogame_asset)),
+                ],
+                selected: <QuizType>{_quizType},
+                onSelectionChanged: (Set<QuizType> newSelection) {
+                  setState(() {
+                    _quizType = newSelection.first;
+                    // Recreate TabController with correct length
+                    _tabController = TabController(length: _quizType == QuizType.standard ? 2 : 1, vsync: this);
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          // --- [END] NEW WIDGET ---
           TextFormField(
             controller: _titleController,
             decoration: const InputDecoration(labelText: 'ชื่อแบบทดสอบ*'),
@@ -316,7 +349,6 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
                   quizTitle: _titleController.text,
                 ),
               )).then((_) {
-                // Refresh results after returning from assignment screen
                 setState(() {
                   _assignmentResultsFuture = _fetchAssignmentResults();
                 });
@@ -330,7 +362,6 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
           padding: const EdgeInsets.all(16.0),
           child: _buildSectionHeader('ผลการทดสอบ'),
         ),
-        // --- [START] MODIFIED CODE: Use FutureBuilder to display results ---
         Expanded(
           child: FutureBuilder<List<_AssignmentResult>>(
             future: _assignmentResultsFuture,
@@ -379,7 +410,6 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
             },
           ),
         ),
-        // --- [END] MODIFIED CODE ---
       ],
     );
   }
@@ -395,7 +425,7 @@ class _QuizEditorScreenState extends State<QuizEditorScreen> with SingleTickerPr
   }
 }
 
-// Dialog for Adding/Editing Questions (No changes)
+// Dialog for Adding/Editing Questions (No changes from previous version)
 class _QuestionDialog extends StatefulWidget {
   final Question? question;
   final Function(Question) onSave;
