@@ -4,8 +4,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:hr_online/models/attendance_log_model.dart';
 import 'package:hr_online/models/employee_model.dart';
 import 'package:hr_online/models/qr_location_model.dart';
+import 'package:hr_online/screens/attendance/attendance_summary_screen.dart';
 import 'package:hr_online/widgets/app_layout.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:geolocator/geolocator.dart';
@@ -123,7 +125,6 @@ class _GpsCheckinScreenState extends State<GpsCheckinScreen> {
     });
   }
 
-  // --- [START] MODIFIED CODE: Replaced old dialog with a new one showing 4 options ---
   Future<void> _showAttendanceTypeDialog(QrLocation location) async {
     showDialog<String>(
       context: context,
@@ -195,7 +196,7 @@ class _GpsCheckinScreenState extends State<GpsCheckinScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('ยืนยันการลงเวลา'),
+        title: const Text('ยืนยันการลงเวลา'),
         content: Text('คุณต้องการยืนยันการลงเวลา "${typeTextMap[attendanceType]}" ที่ ${location.name} ใช่หรือไม่?'),
         actions: [
           TextButton(
@@ -214,9 +215,7 @@ class _GpsCheckinScreenState extends State<GpsCheckinScreen> {
       _processAttendance(location, attendanceType);
     }
   }
-  // --- [END] MODIFIED CODE ---
-
-  // --- [START] MODIFIED CODE: Updated to handle all 4 attendance types ---
+  
   Future<void> _processAttendance(
       QrLocation location, String attendanceType) async {
     if (widget.loggedInEmployee == null) {
@@ -296,17 +295,21 @@ class _GpsCheckinScreenState extends State<GpsCheckinScreen> {
 
       await docRef.set(dataToUpdate, firestore.SetOptions(merge: true));
 
+      final updatedDoc = await docRef.get();
+      final updatedLog = AttendanceLog.fromFirestore(updatedDoc);
+
       if (mounted) {
         context
             .read<AttendanceStatusProvider>()
             .listenToAttendanceForDate(DateTime.now());
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('บันทึกเวลา ($attendanceType) ที่ ${location.name} สำเร็จ!'),
-            backgroundColor: Colors.green,
+        
+        Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (context) => AttendanceSummaryScreen(
+            log: updatedLog,
+            employee: widget.loggedInEmployee!,
+            attendanceType: attendanceType,
           ),
-        );
-        Navigator.of(context).pop();
+        ));
       }
     } catch (e) {
       _showError(e.toString().replaceFirst('Exception: ', ''));
@@ -316,7 +319,6 @@ class _GpsCheckinScreenState extends State<GpsCheckinScreen> {
       }
     }
   }
-  // --- [END] MODIFIED CODE ---
 
   void _showError(String message) {
     if (!mounted) return;

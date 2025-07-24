@@ -9,6 +9,7 @@ import 'package:hr_online/screens/add_employee_screen.dart';
 import 'package:hr_online/screens/admin/compensation_history_screen.dart';
 import 'package:hr_online/screens/admin/edit_global_announcement_screen.dart';
 import 'package:hr_online/screens/admin/employee_evaluation_list_screen.dart';
+import 'package:hr_online/screens/admin/employee_income_screen.dart';
 import 'package:hr_online/screens/admin/job_posting_management_screen.dart';
 import 'package:hr_online/screens/admin/outsource_management_screen.dart';
 import 'package:hr_online/screens/admin/quiz_management_screen.dart';
@@ -25,6 +26,7 @@ import 'package:hr_online/screens/leave/leave_request_list_screen.dart';
 import 'package:hr_online/screens/login_screen.dart';
 import 'package:hr_online/screens/master_settings_screen.dart';
 import 'package:hr_online/screens/my_qr_code_screen.dart';
+import 'package:hr_online/screens/payslip_screen.dart';
 import 'package:hr_online/screens/profile_screen.dart';
 import 'package:hr_online/screens/ranking_screen.dart';
 import 'package:hr_online/screens/upload_employee_screen.dart';
@@ -72,7 +74,6 @@ class MainDrawer extends StatelessWidget {
     );
   }
 
-  /// Builds the header section of the drawer with custom layout.
   Widget _buildDrawerHeader(BuildContext context) {
     final statusProvider = Provider.of<AttendanceStatusProvider>(context, listen: false);
     final status = isUserAdmin
@@ -81,11 +82,9 @@ class MainDrawer extends StatelessWidget {
     
     final statusInfo = _getStatusTextAndColor(status);
     
-    // --- [START] RESTORED POSITION/DEPARTMENT TEXT ---
     final positionNames = loggedInEmployee?.positions.isNotEmpty ?? false
         ? loggedInEmployee!.positions.map((p) => p['name'] ?? '').join(', ')
         : 'ยังไม่มีตำแหน่ง';
-    // --- [END] RESTORED POSITION/DEPARTMENT TEXT ---
 
     return DrawerHeader(
       margin: EdgeInsets.zero,
@@ -121,13 +120,11 @@ class MainDrawer extends StatelessWidget {
                       style: GoogleFonts.anuphan(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
                       overflow: TextOverflow.ellipsis,
                     ),
-                    // --- [START] RESTORED POSITION/DEPARTMENT TEXT ---
                     Text(
                       isUserAdmin ? 'Admin' : '$positionNames (${loggedInEmployee?.employeeId ?? ''})',
                       style: GoogleFonts.anuphan(color: Colors.white.withOpacity(0.9)),
                        overflow: TextOverflow.ellipsis,
                     ),
-                    // --- [END] RESTORED POSITION/DEPARTMENT TEXT ---
                   ],
                 ),
               ),
@@ -159,7 +156,6 @@ class MainDrawer extends StatelessWidget {
     );
   }
 
-  /// Builds menu items visible to regular employees, outsource staff, and Admins.
   List<Widget> _buildEmployeeAndOutsourceMenuItems(BuildContext context, Employee? employee) {
     final bool isEmployeeView = employee != null;
 
@@ -170,6 +166,8 @@ class MainDrawer extends StatelessWidget {
       if (isEmployeeView && employee.isDepartmentHead)
         _buildDrawerItem(context, 'QR Code ของฉัน', Icons.qr_code_2,
             () => _navigateTo(context, MyQRCodeScreen(loggedInEmployee: employee))),
+      _buildDrawerItem(context, 'สลิปเงินเดือน', Icons.receipt_long,
+          isEmployeeView ? () => _navigateTo(context, PayslipScreen(loggedInEmployee: employee)) : null),
       _buildDrawerItem(context, 'รายการลางาน', Icons.event_note,
           isEmployeeView ? () => _navigateTo(context, LeaveRequestListScreen(loggedInEmployee: employee, isUserAdmin: isUserAdmin)) : null),
       _buildDrawerItem(context, 'แบบทดสอบ', Icons.quiz_outlined,
@@ -185,7 +183,6 @@ class MainDrawer extends StatelessWidget {
     ];
   }
   
-  /// Builds menu items visible only to Department Heads (and Admins).
   List<Widget> _buildDepartmentHeadMenuItems(BuildContext context) {
     return [
        const Divider(),
@@ -195,12 +192,13 @@ class MainDrawer extends StatelessWidget {
     ];
   }
 
-  /// Builds a list of menu items visible only to Admin users.
   List<Widget> _buildAdminOnlyMenuItems(BuildContext context) {
     return [
       _buildSectionHeader('สำหรับผู้ดูแลระบบ'),
       _buildDrawerItem(context, 'จัดการข้อมูลหลัก', Icons.settings_applications,
           () => _navigateTo(context, MasterSettingsScreen(isUserAdmin: isUserAdmin, loggedInEmployee: loggedInEmployee))),
+      _buildDrawerItem(context, 'กำหนดรายได้พนักงาน', Icons.paid_outlined,
+          () => _navigateTo(context, const EmployeeIncomeScreen())),
       _buildDrawerItem(context, 'จัดสรรกำลังคน', Icons.groups,
           () => _navigateTo(context, WorkforceAllocationScreen(isUserAdmin: isUserAdmin, loggedInEmployee: loggedInEmployee))),
       _buildDrawerItem(context, 'OutSource', Icons.engineering,
@@ -232,7 +230,6 @@ class MainDrawer extends StatelessWidget {
     ];
   }
 
-  /// Helper to create a section header in the drawer.
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -246,25 +243,22 @@ class MainDrawer extends StatelessWidget {
     );
   }
 
-  /// Helper to create a standard drawer list item.
   Widget _buildDrawerItem(
       BuildContext context, String title, IconData icon, VoidCallback? onTap) {
     return ListTile(
       leading: Icon(icon, color: onTap != null ? Colors.grey.shade700 : Colors.grey.shade400),
       title: Text(title, style: GoogleFonts.anuphan(color: onTap != null ? Colors.black87 : Colors.grey.shade500)),
       onTap: onTap == null ? null : () {
-        Navigator.pop(context); // Close the drawer first
+        Navigator.pop(context);
         onTap();
       },
     );
   }
 
-  /// Helper to navigate to a new screen.
   void _navigateTo(BuildContext context, Widget screen) {
     Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
   }
 
-  /// Handles the entire logout process.
   void _handleLogout(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -301,7 +295,6 @@ class MainDrawer extends StatelessWidget {
     }
   }
 
-  /// Returns status text and color for the header.
   Map<String, dynamic> _getStatusTextAndColor(EmployeeAttendanceStatus status) {
     switch (status) {
       case EmployeeAttendanceStatus.checkedIn:

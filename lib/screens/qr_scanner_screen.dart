@@ -3,7 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:hr_online/models/attendance_log_model.dart';
 import 'package:hr_online/models/employee_model.dart';
+import 'package:hr_online/screens/attendance/attendance_summary_screen.dart';
 import 'package:hr_online/widgets/app_layout.dart';
 import 'package:hr_online/widgets/employee_avatar.dart';
 import 'package:intl/intl.dart';
@@ -13,7 +15,7 @@ import 'package:hr_online/providers/attendance_status_provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-enum ScanStep { waitingForScan, showConfirmation, processing, success }
+enum ScanStep { waitingForScan, showConfirmation, processing }
 
 class QRScannerScreen extends StatefulWidget {
   final bool isUserAdmin;
@@ -39,7 +41,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
   ScanStep _currentStep = ScanStep.waitingForScan;
   String? _scannedLocationName;
-  String _attendanceType = '';
 
   @override
   void dispose() {
@@ -84,7 +85,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     }
   }
 
-  // --- [START] NEW METHOD: Final Confirmation Dialog ---
   Future<void> _showFinalConfirmationDialog(String attendanceType) async {
     final typeTextMap = {
       'checkIn': 'เข้างาน',
@@ -95,7 +95,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('ยืนยันการลงเวลา'),
+        title: const Text('ยืนยันการลงเวลา'),
         content: Text('คุณต้องการยืนยันการลงเวลา "${typeTextMap[attendanceType]}" ที่ $_scannedLocationName ใช่หรือไม่?'),
         actions: [
           TextButton(
@@ -114,7 +114,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       _processAttendance(attendanceType);
     }
   }
-  // --- [END] NEW METHOD ---
 
   Future<firestore.GeoPoint?> _fetchCurrentLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -153,7 +152,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
     setState(() {
       _currentStep = ScanStep.processing;
-      _attendanceType = attendanceType;
     });
 
     final currentLocation = await _fetchCurrentLocation();
@@ -230,16 +228,23 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       }
 
       await docRef.set(dataToUpdate, firestore.SetOptions(merge: true));
+      
+      final updatedDoc = await docRef.get();
+      final updatedLog = AttendanceLog.fromFirestore(updatedDoc);
 
       if (mounted) {
         context
             .read<AttendanceStatusProvider>()
             .listenToAttendanceForDate(DateTime.now());
+        
+        Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (context) => AttendanceSummaryScreen(
+            log: updatedLog,
+            employee: widget.loggedInEmployee!,
+            attendanceType: attendanceType,
+          ),
+        ));
       }
-
-      setState(() {
-        _currentStep = ScanStep.success;
-      });
     } catch (e) {
       _showErrorAndReset(e.toString().replaceFirst('Exception: ', ''));
     }
@@ -305,9 +310,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         return _buildConfirmationView();
       case ScanStep.processing:
         return const Center(child: CircularProgressIndicator(color: Colors.white));
-      case ScanStep.success:
-        return _buildSuccessView();
-      }
+    }
   }
 
   Widget _buildScannerView() {
@@ -397,31 +400,23 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               ElevatedButton.icon(
                   icon: const Icon(Icons.login),
                   label: const Text('เข้างาน'),
-                  // --- [START] MODIFIED CODE ---
                   onPressed: () => _showFinalConfirmationDialog('checkIn'),
-                  // --- [END] MODIFIED CODE ---
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green)),
               ElevatedButton.icon(
                   icon: const Icon(Icons.logout),
                   label: const Text('ออกงาน'),
-                  // --- [START] MODIFIED CODE ---
                   onPressed: () => _showFinalConfirmationDialog('checkOut'),
-                  // --- [END] MODIFIED CODE ---
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red)),
               ElevatedButton.icon(
                   icon: const Icon(Icons.pause_circle_outline),
                   label: const Text('ออกพัก'),
-                  // --- [START] MODIFIED CODE ---
                   onPressed: () => _showFinalConfirmationDialog('breakOut'),
-                  // --- [END] MODIFIED CODE ---
                   style:
                       ElevatedButton.styleFrom(backgroundColor: Colors.orange)),
               ElevatedButton.icon(
                   icon: const Icon(Icons.play_circle_outline),
                   label: const Text('เข้าพัก'),
-                  // --- [START] MODIFIED CODE ---
                   onPressed: () => _showFinalConfirmationDialog('breakIn'),
-                  // --- [END] MODIFIED CODE ---
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.blue)),
             ],
           ),
@@ -431,67 +426,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               child: const Text('ยกเลิกและสแกนใหม่',
                   style: TextStyle(color: Colors.grey)))
         ],
-      ),
-    );
-  }
-
-  Widget _buildSuccessView() {
-    Color themeColor = Colors.grey;
-    String successMessage = 'บันทึกเวลาสำเร็จ!';
-    switch (_attendanceType) {
-      case 'checkIn':
-        successMessage = 'บันทึกเวลาเข้างานสำเร็จ!';
-        themeColor = Colors.green;
-        break;
-      case 'checkOut':
-        successMessage = 'บันทึกเวลาออกงานสำเร็จ!';
-        themeColor = Colors.red;
-        break;
-      case 'breakOut':
-        successMessage = 'บันทึกเวลาออกพักสำเร็จ!';
-        themeColor = Colors.orange;
-        break;
-      case 'breakIn':
-        successMessage = 'บันทึกเวลาเข้าพักสำเร็จ!';
-        themeColor = Colors.blue;
-        break;
-    }
-
-    return Container(
-      key: const ValueKey('success'),
-      color: themeColor,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.check_circle_outline,
-                  color: Colors.white, size: 120),
-              const SizedBox(height: 24),
-              Text(successMessage,
-                  style: GoogleFonts.anuphan(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white)),
-              const SizedBox(height: 16),
-              Text('สถานที่: $_scannedLocationName',
-                  style: GoogleFonts.anuphan(fontSize: 18, color: Colors.white)),
-              Text('เวลา: ${DateFormat('HH:mm:ss').format(DateTime.now())}',
-                  style: GoogleFonts.anuphan(fontSize: 18, color: Colors.white)),
-              const SizedBox(height: 48),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('ปิด'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white, foregroundColor: themeColor),
-                ),
-              )
-            ],
-          ),
-        ),
       ),
     );
   }
