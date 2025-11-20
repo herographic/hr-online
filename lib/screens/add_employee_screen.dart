@@ -27,11 +27,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   
-  // --- [START] WEB COMPATIBILITY MODIFICATION ---
-  // Use Uint8List for web compatibility, as it represents raw data.
   Uint8List? _imageBytes;
-  // --- [END] WEB COMPATIBILITY MODIFICATION ---
-
   String? _networkImageUrl;
 
   String _departmentName = 'ยังไม่ได้กำหนด';
@@ -66,6 +62,10 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
   String? _selectedMaritalStatus;
   DateTime? _birthDate;
   DateTime? _startDate;
+
+  // --- [START] ADDED CODE ---
+  bool _isOutsource = false;
+  // --- [END] ADDED CODE ---
 
   @override
   void initState() {
@@ -102,6 +102,10 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     _closeFriend2PhoneController = TextEditingController(text: addContacts['close_friend2_phone']);
     _supervisorNameController = TextEditingController(text: addContacts['supervisor_name']);
     _supervisorPhoneController = TextEditingController(text: addContacts['supervisor_phone']);
+    
+    // --- [START] ADDED CODE ---
+    _isOutsource = emp?.isOutsource ?? false;
+    // --- [END] ADDED CODE ---
   }
 
   void _populateFormForEdit() {
@@ -111,6 +115,9 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     _selectedMaritalStatus = emp.maritalStatus;
     _birthDate = emp.birthDate?.toDate();
     _startDate = emp.startDate.toDate();
+    // --- [START] ADDED CODE ---
+    _isOutsource = emp.isOutsource;
+    // --- [END] ADDED CODE ---
   }
 
   Future<void> _fetchReferencedData() async {
@@ -151,7 +158,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
 
   @override
   void dispose() {
-    // Dispose all controllers
     _employeeCodeController.dispose();
     _titleController.dispose();
     _firstNameController.dispose();
@@ -196,15 +202,11 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
       final employeeId = _employeeCodeController.text.trim();
       String? imageUrl = _networkImageUrl;
 
-      // --- [START] WEB COMPATIBILITY MODIFICATION ---
-      // Check if there's a new image to upload (as bytes)
       if (_imageBytes != null) {
         final storageRef = FirebaseStorage.instance.ref().child('profile_images').child('$employeeId.jpg');
-        // Use putData for both web and mobile, as it works universally with Uint8List
         await storageRef.putData(_imageBytes!);
         imageUrl = await storageRef.getDownloadURL();
       }
-      // --- [END] WEB COMPATIBILITY MODIFICATION ---
 
       final Map<String, dynamic> employeeData = {
         'title': _titleController.text.trim(),
@@ -240,6 +242,9 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
           'accountNumber': _bankAccountController.text.trim(),
         },
         'updatedAt': FieldValue.serverTimestamp(),
+        // --- [START] ADDED CODE ---
+        'isOutsource': _isOutsource,
+        // --- [END] ADDED CODE ---
       };
       
       if (widget.employeeToEdit == null) {
@@ -301,6 +306,20 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
             _buildTextField(_lastNameController, 'นามสกุล*'),
             _buildTextField(_nicknameController, 'ชื่อเล่น'),
             
+            // --- [START] ADDED CODE ---
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('บุคคลภายนอก (Outsource)', style: GoogleFonts.anuphan(fontSize: 16)),
+              value: _isOutsource,
+              onChanged: (bool value) {
+                setState(() {
+                  _isOutsource = value;
+                });
+              },
+              secondary: Icon(_isOutsource ? Icons.engineering : Icons.business_center),
+            ),
+            // --- [END] ADDED CODE ---
+
             _buildSectionHeader('ข้อมูลส่วนตัว'),
             _buildDropdown(_selectedGender, (val) => setState(() => _selectedGender = val), ['ชาย', 'หญิง', 'ไม่ระบุ'], 'เพศ*'),
             _buildDropdown(_selectedMaritalStatus, (val) => setState(() => _selectedMaritalStatus = val), ['โสด', 'สมรส', 'หย่าร้าง', 'หม้าย'], 'สถานภาพ'),

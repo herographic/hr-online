@@ -1,4 +1,4 @@
-// lib/widgets/work_submission_card.dart
+// lib/widgets/work_submission_card.dart (แก้ไข)
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +7,7 @@ import 'package:hr_online/models/employee_model.dart';
 import 'package:hr_online/models/work_submission_model.dart';
 import 'package:hr_online/providers/attendance_status_provider.dart';
 import 'package:hr_online/screens/image_viewer_screen.dart';
+import 'package:hr_online/utils/experience_helper.dart';
 import 'package:hr_online/widgets/employee_status_avatar.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -63,42 +64,61 @@ class _WorkSubmissionCardState extends State<WorkSubmissionCard> {
     final scorerId = widget.loggedInEmployee?.employeeId;
     if (scorerId == null) return;
 
-    final submissionRef = FirebaseFirestore.instance.collection('work_submissions').doc(widget.submission.id);
-    final employeeRef = FirebaseFirestore.instance.collection('users').doc(widget.submission.authorId);
+    if (scorerId == widget.submission.authorId) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('คุณไม่สามารถให้คะแนนโพสต์ของตัวเองได้')));
+      return;
+    }
 
+    final submissionRef = FirebaseFirestore.instance.collection('work_submissions').doc(widget.submission.id);
+    
     try {
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final submissionSnapshot = await transaction.get(submissionRef);
-        final employeeSnapshot = await transaction.get(employeeRef);
 
-        if (!submissionSnapshot.exists || !employeeSnapshot.exists) {
+        if (!submissionSnapshot.exists) {
           throw Exception("Document does not exist!");
         }
 
         final submissionData = submissionSnapshot.data()!;
-        final employeeData = employeeSnapshot.data()!;
         final currentRatings = Map<String, int>.from(submissionData['ratings'] ?? {});
-        final oldScoreFromThisUser = currentRatings[scorerId] ?? 0;
-
-        if (oldScoreFromThisUser > 0) {
-          throw ('คุณได้ให้คะแนนโพสต์นี้ไปแล้ว');
+        
+        if (currentRatings.containsKey(scorerId)) {
+           throw ('คุณได้ให้คะแนนโพสต์นี้ไปแล้ว');
         }
 
         currentRatings[scorerId] = score;
-
         final newSubmissionTotalScore = currentRatings.values.fold(0, (sum, item) => sum + item);
-        final scoreDifference = newSubmissionTotalScore - (submissionData['totalScore'] ?? 0);
-        final newEmployeeTotalScore = (employeeData['totalScore'] ?? 0) + scoreDifference;
 
         transaction.update(submissionRef, {
           'ratings': currentRatings,
           'totalScore': newSubmissionTotalScore,
         });
-
-        transaction.update(employeeRef, {
-          'totalScore': newEmployeeTotalScore,
-        });
       });
+
+      final String actionText = score == 1 ? "กดไลค์" : "ให้คะแนน";
+
+      await ExperienceUtils.addExperience(
+        widget.submission.authorId, 
+        score, 
+        sourceType: 'rating_received', 
+        sourceDetails: '$actionText จาก ${widget.loggedInEmployee!.nickname}'
+      );
+      await ExperienceUtils.addExperience(
+        scorerId, 
+        1,
+        sourceType: 'gave_rating', 
+        sourceDetails: '$actionText โพสต์ของ ${widget.submission.authorNickname}'
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('คุณได้รับ +1 EXP และ ${widget.submission.authorNickname} ได้รับ +$score EXP!'),
+            backgroundColor: Colors.green,
+          )
+        );
+      }
+
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -122,8 +142,8 @@ class _WorkSubmissionCardState extends State<WorkSubmissionCard> {
                   Slider(
                     value: selectedScore.toDouble(),
                     min: 1,
-                    max: 10,
-                    divisions: 9,
+                    max: 5,
+                    divisions: 4,
                     label: selectedScore.toString(),
                     onChanged: (double value) {
                       setDialogState(() {
@@ -180,81 +200,62 @@ class _WorkSubmissionCardState extends State<WorkSubmissionCard> {
   }
 
   Widget _buildHeader() {
-    return Consumer<AttendanceStatusProvider>(
-      builder: (context, attendanceProvider, child) {
-        final attendanceStatus = attendanceProvider.statuses[widget.submission.authorId] ?? EmployeeAttendanceStatus.unknown;
-        
-        final bool isOnline = attendanceStatus == EmployeeAttendanceStatus.checkedIn;
-        final Color onlineStatusColor = isOnline ? Colors.green.shade400 : Colors.red.shade400;
-        final String onlineStatusText = isOnline ? 'Online' : 'Offline';
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(widget.submission.authorId).snapshots(),
+      builder: (context, userSnapshot) {
+        if (!userSnapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Row(children: [SizedBox(width: 75, height: 75), CircularProgressIndicator(color: Colors.white)])
+          );
+        }
 
-        return StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection('users').doc(widget.submission.authorId).snapshots(),
-          builder: (context, userSnapshot) {
-            if (!userSnapshot.hasData) {
-              return const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Row(children: [SizedBox(width: 75, height: 75), CircularProgressIndicator(color: Colors.white)])
-              );
-            }
+        final author = Employee.fromFirestore(userSnapshot.data!);
+        final postTime = thaiDateFormat.format(widget.submission.timestamp.toDate());
 
-            final userData = userSnapshot.data!.data() as Map<String, dynamic>? ?? {};
-            final totalScore = userData['totalScore'] ?? 0;
-            final authorGender = userData['gender'] as String?;
-            final postTime = thaiDateFormat.format(widget.submission.timestamp.toDate());
-
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  EmployeeStatusAvatar(
-                    employeeId: widget.submission.authorId,
-                    imageUrl: widget.submission.authorImageUrl,
-                    gender: authorGender,
-                    radius: 32,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              EmployeeStatusAvatar(
+                employeeId: widget.submission.authorId,
+                imageUrl: widget.submission.authorImageUrl,
+                gender: author.gender,
+                radius: 32,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${widget.submission.authorNickname} (${widget.submission.authorId})',
+                      style: GoogleFonts.anuphan(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white, shadows: [const Shadow(blurRadius: 2, color: Colors.black38)]),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${widget.submission.authorDepartment ?? 'ไม่ระบุแผนก'} • ${widget.submission.authorPosition ?? 'ไม่ระบุตำแหน่ง'}',
+                      style: GoogleFonts.anuphan(fontSize: 13, color: Colors.white.withOpacity(0.9)),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          '${widget.submission.authorNickname} (${widget.submission.authorId})',
-                          style: GoogleFonts.anuphan(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white, shadows: [const Shadow(blurRadius: 2, color: Colors.black38)]),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${widget.submission.authorDepartment ?? 'ไม่ระบุแผนก'} • ${widget.submission.authorPosition ?? 'ไม่ระบุตำแหน่ง'}',
-                          style: GoogleFonts.anuphan(fontSize: 13, color: Colors.white.withOpacity(0.9)),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 9, height: 9,
-                              decoration: BoxDecoration(color: onlineStatusColor, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 1.5)),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(onlineStatusText, style: GoogleFonts.anuphan(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
-                            Text("  •  ", style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.bold)),
-                            Icon(Icons.military_tech_outlined, color: Colors.amber.shade200, size: 14),
-                            const SizedBox(width: 4),
-                            Text('$totalScore', style: GoogleFonts.anuphan(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
-                            Text("  •  ", style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.bold)),
-                            Expanded(child: Text(postTime, style: GoogleFonts.anuphan(fontSize: 12, color: Colors.white.withOpacity(0.9)), overflow: TextOverflow.ellipsis)),
-                          ],
-                        ),
+                        Icon(Icons.star, color: Colors.amber.shade200, size: 14),
+                        const SizedBox(width: 4),
+                        Text('Lv.${author.level} ${author.levelTitle}', style: GoogleFonts.anuphan(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                        Text("  •  ", style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.bold)),
+                        Expanded(child: Text(postTime, style: GoogleFonts.anuphan(fontSize: 12, color: Colors.white.withOpacity(0.9)), overflow: TextOverflow.ellipsis)),
                       ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            );
-          },
+            ],
+          ),
         );
       },
     );
@@ -345,11 +346,26 @@ class _WorkSubmissionCardState extends State<WorkSubmissionCard> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           if (widget.submission.taggedEmployees.isNotEmpty)
-            Tooltip(
-              message: 'แท็กถึง: ${widget.submission.taggedEmployees.map((e) => e['name']).join(', ')}',
-              child: const Icon(Icons.alternate_email, size: 20, color: Colors.grey),
-            ),
-          const Spacer(),
+            Expanded(
+              child: Tooltip(
+                message: 'แท็กถึง: ${widget.submission.taggedEmployees.map((e) => e['name']).join(', ')}',
+                child: Row(
+                  children: [
+                    const Icon(Icons.alternate_email, size: 20, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        widget.submission.taggedEmployees.map((e) => e['name']).join(', '),
+                        style: GoogleFonts.anuphan(fontSize: 12, color: Colors.grey.shade700),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            const Spacer(),
           Row(
             children: [
               TextButton.icon(
@@ -364,13 +380,6 @@ class _WorkSubmissionCardState extends State<WorkSubmissionCard> {
                   tooltip: 'ให้คะแนน',
                   onPressed: hasRated ? null : _showScoreDialog,
                 ),
-              const SizedBox(width: 8),
-              const Icon(Icons.military_tech, color: Colors.orange, size: 20),
-              const SizedBox(width: 4),
-              Text(
-                '${widget.submission.totalScore}',
-                style: GoogleFonts.anuphan(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
             ],
           ),
         ],

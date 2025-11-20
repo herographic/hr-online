@@ -27,11 +27,9 @@ class EmployeeDetailScreen extends StatefulWidget {
 }
 
 class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
-  // --- [START] NEW STATE VARIABLES ---
   String? _selectedStatus;
   final _statusNoteController = TextEditingController();
   bool _isStatusEditMode = false;
-  // --- [END] NEW STATE VARIABLES ---
 
   @override
   void dispose() {
@@ -65,7 +63,6 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
 
         final employee = Employee.fromFirestore(snapshot.data!);
 
-        // Populate state variables when not in edit mode
         if (!_isStatusEditMode) {
           _selectedStatus = employee.employmentStatus;
           _statusNoteController.text = employee.employmentStatusNote ?? '';
@@ -174,8 +171,10 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
               icon: Icons.work_outline,
               children: [
                 _buildInfoRow('รหัสพนักงาน:', employee.employeeId),
+                // --- [START] MODIFIED CODE: Replaced totalScore with Leveling System ---
                 _buildInfoRowWithIcon(
-                    'คะแนนสะสม:', '${employee.totalScore} แต้ม', Icons.military_tech, Colors.amber),
+                    'ยศ:', 'Lv. ${employee.level} ${employee.levelTitle}', Icons.military_tech, Colors.amber),
+                // --- [END] MODIFIED CODE ---
                 _buildInfoRow('แผนก:', departmentName),
                 _buildInfoRow('ตำแหน่ง:', positionNames),
                 _buildInfoRow(
@@ -235,7 +234,6 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
     );
   }
 
-  // --- [START] NEW WIDGETS AND METHODS FOR STATUS MANAGEMENT ---
   Widget _buildStatusManagementCard(BuildContext context, Employee employee) {
     final statusList = [
       'ปกติ',
@@ -324,7 +322,6 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
               onPressed: () {
                 setState(() {
                   _isStatusEditMode = false;
-                  // Reset values to original from the employee object
                   _selectedStatus = employee.employmentStatus;
                   _statusNoteController.text = employee.employmentStatusNote ?? '';
                 });
@@ -344,7 +341,6 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
   Future<void> _saveStatus() async {
     try {
       String? statusToSave = _selectedStatus;
-      // Store null in Firestore if status is 'ปกติ' for cleaner data
       if (statusToSave == 'ปกติ') {
         statusToSave = null;
       }
@@ -371,7 +367,6 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
       }
     }
   }
-  // --- [END] NEW WIDGETS AND METHODS ---
 
   String _formatShiftTime(String time) {
     if (time.endsWith(':00')) {

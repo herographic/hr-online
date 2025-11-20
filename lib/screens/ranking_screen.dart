@@ -27,10 +27,7 @@ class _RankingScreenState extends State<RankingScreen> {
       isUserAdmin: widget.isUserAdmin,
       loggedInEmployee: widget.loggedInEmployee,
       overrideTitle: 'อันดับคะแนน',
-      // --- [START] MODIFIED CODE ---
-      // Changed to false to show the drawer menu icon
       showBackButton: false,
-      // --- [END] MODIFIED CODE ---
       bodySlivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -50,8 +47,11 @@ class _RankingScreenState extends State<RankingScreen> {
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('users')
-              .orderBy('totalScore', descending: true)
-              .limit(100) // Limit to top 100 to manage performance
+              // --- [START] MODIFIED CODE: Update query for new leveling system ---
+              .orderBy('level', descending: true)
+              .orderBy('exp', descending: true)
+              // --- [END] MODIFIED CODE ---
+              .limit(100)
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -135,12 +135,23 @@ class _RankingListItem extends StatelessWidget {
           ),
         ),
         title: Text(employee.fullName, style: GoogleFonts.anuphan(fontWeight: FontWeight.w600)),
-        subtitle: Text('ID: ${employee.employeeId}'),
-        trailing: Text(
-          '${employee.totalScore} แต้ม',
-          style: GoogleFonts.anuphan(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor),
+        // --- [START] MODIFIED CODE: Show level title in subtitle ---
+        subtitle: Text(employee.levelTitle, style: GoogleFonts.anuphan(color: Colors.grey.shade600)),
+        // --- [END] MODIFIED CODE ---
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              'Lv. ${employee.level}',
+              style: GoogleFonts.anuphan(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor),
+            ),
+            Text(
+              '${employee.exp}/${employee.nextLevelExp} EXP',
+              style: GoogleFonts.anuphan(fontSize: 12, color: Colors.grey.shade700),
+            ),
+          ],
         ),
-        leadingAndTrailingTextStyle: const TextStyle(color: Colors.black),
       ),
     );
   }

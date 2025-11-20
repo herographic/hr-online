@@ -15,6 +15,7 @@ import 'package:hr_online/screens/all_employees_screen.dart';
 import 'package:hr_online/screens/employee/quiz_list_screen.dart';
 import 'package:hr_online/screens/leave/leave_approval_list_screen.dart';
 import 'package:hr_online/widgets/app_layout.dart';
+import 'package:hr_online/widgets/experience_bar.dart';
 import 'package:hr_online/widgets/submit_work_dialog.dart';
 import 'package:hr_online/widgets/work_submission_card.dart';
 import 'package:intl/intl.dart';
@@ -217,6 +218,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           isUserAdmin: widget.isUserAdmin,
           loggedInEmployee: widget.loggedInEmployee,
           bodySlivers: [
+            // --- [START] ADDED CODE: Experience Bar ---
+            if (widget.loggedInEmployee != null)
+              SliverToBoxAdapter(
+                child: StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance.collection('users').doc(widget.loggedInEmployee!.employeeId).snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData || !snapshot.data!.exists) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                        child: Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: Container(
+                            padding: const EdgeInsets.all(12.0),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF00c6ff), Color(0xFF0072ff)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: ExperienceBar(employee: widget.loggedInEmployee!),
+                          ),
+                        ),
+                      );
+                    }
+                    final updatedEmployee = Employee.fromFirestore(snapshot.data!);
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: Card(
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: Container(
+                          padding: const EdgeInsets.all(12.0),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF00c6ff), Color(0xFF0072ff)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                          child: ExperienceBar(employee: updatedEmployee),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            // --- [END] ADDED CODE ---
             const SliverToBoxAdapter(
               child: _GlobalAnnouncementCard(),
             ),
@@ -651,7 +703,6 @@ class _AttendanceInfoCard extends StatelessWidget {
             ? timeFormat.format(log!.checkOut!.toDate())
             : '- : -';
 
-        // --- [START] NEW COLOR LOGIC ---
         Color checkInColor = Colors.white;
         Color checkOutColor = Colors.white;
 
@@ -667,7 +718,6 @@ class _AttendanceInfoCard extends StatelessWidget {
               scheduledCheckOut = scheduledCheckOut.add(const Duration(days: 1));
             }
 
-            // Check-in color logic
             if (log.checkIn != null) {
               final actualCheckIn = log.checkIn!.toDate();
               if (actualCheckIn.isAfter(scheduledCheckIn.add(const Duration(minutes: 1)))) {
@@ -677,7 +727,6 @@ class _AttendanceInfoCard extends StatelessWidget {
               }
             }
 
-            // Check-out color logic
             if (log.checkOut != null) {
               final actualCheckOut = log.checkOut!.toDate();
               if (actualCheckOut.isBefore(scheduledCheckOut)) {
@@ -690,8 +739,6 @@ class _AttendanceInfoCard extends StatelessWidget {
             // ignore parsing errors
           }
         }
-        // --- [END] NEW COLOR LOGIC ---
-
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -747,9 +794,7 @@ class _AttendanceInfoCard extends StatelessWidget {
     );
   }
 
-  // --- [START] MODIFIED WIDGET ---
   Widget _buildTimeDisplay(String label, String time, {Color color = Colors.white}) {
-  // --- [END] MODIFIED WIDGET ---
     return Column(
       children: [
         Text(
@@ -765,9 +810,7 @@ class _AttendanceInfoCard extends StatelessWidget {
           style: GoogleFonts.orbitron(
             fontSize: 22,
             fontWeight: FontWeight.bold,
-            // --- [START] MODIFIED CODE ---
-            color: color, // Use the passed color
-            // --- [END] MODIFIED CODE ---
+            color: color,
           ),
         ),
       ],

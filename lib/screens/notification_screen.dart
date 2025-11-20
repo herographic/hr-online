@@ -6,19 +6,18 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:hr_online/models/announcement_model.dart';
 import 'package:hr_online/models/attendance_log_model.dart';
 import 'package:hr_online/models/employee_model.dart';
+import 'package:hr_online/models/exp_log_model.dart'; // Import the new model
 import 'package:hr_online/models/leave_request_model.dart';
 import 'package:hr_online/models/quiz_model.dart';
 import 'package:hr_online/models/time_update_request_model.dart';
 import 'package:hr_online/models/work_submission_model.dart';
 import 'package:hr_online/widgets/app_layout.dart';
 import 'package:intl/intl.dart';
-import 'package:collection/collection.dart'; // For groupBy
-import 'dart:async'; // For Timer
+import 'package:collection/collection.dart';
+import 'dart:async';
 
-// Enum สำหรับระบุคอลัมน์ที่ใช้เรียงลำดับ
 enum _SortOption { latest, oldest, read, unread }
 
-// Helper class to represent a single notification item
 class NotificationItem {
   final String id;
   final String title;
@@ -26,8 +25,8 @@ class NotificationItem {
   final IconData icon;
   final Color color;
   final Timestamp timestamp;
-  bool isRead; // Added for read/unread status
-  final VoidCallback? onTap; // Optional action when notification is tapped
+  bool isRead;
+  final VoidCallback? onTap;
 
   NotificationItem({
     required this.id,
@@ -36,7 +35,7 @@ class NotificationItem {
     required this.icon,
     required this.color,
     required this.timestamp,
-    this.isRead = false, // Default to unread
+    this.isRead = false,
     this.onTap,
   });
 }
@@ -55,11 +54,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
   List<NotificationItem> _displayedNotifications = [];
   bool _isLoading = true;
 
-  // สำหรับการค้นหาและเรียงลำดับ
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   Timer? _debounce;
-  _SortOption _sortOption = _SortOption.latest; // Default sort option
+  _SortOption _sortOption = _SortOption.latest;
 
   @override
   void initState() {
@@ -76,28 +74,73 @@ class _NotificationScreenState extends State<NotificationScreen> {
     super.dispose();
   }
 
-  // Debounce mechanism for search input
   void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 400), () {
       if (mounted && _searchController.text.toLowerCase() != _searchQuery) {
         setState(() {
           _searchQuery = _searchController.text.toLowerCase();
-          _applyFiltersAndSort(); // Apply filter immediately after search query changes
+          _applyFiltersAndSort();
         });
       }
     });
   }
 
-  // Function to fetch and process all types of notifications
   Future<void> _fetchNotifications() async {
     setState(() => _isLoading = true);
     List<NotificationItem> notifications = [];
     final employeeId = widget.loggedInEmployee.employeeId;
     final now = DateTime.now();
-    final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    final thirtyDaysAgo = now.subtract(const Duration(days: 30));
+    
+    // --- [START] NEW CODE: Fetch and process EXP logs for today ---
+    final expLogsSnapshot = await FirebaseFirestore.instance
+        .collection('exp_log')
+        .where('employeeId', isEqualTo: employeeId)
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfToday))
+        .get();
 
-    // --- 1. Attendance Logs (Incomplete scans) ---
+    if (expLogsSnapshot.docs.isNotEmpty) {
+      final expLogs = expLogsSnapshot.docs.map((doc) => ExpLog.fromFirestore(doc)).toList();
+      final totalExpToday = expLogs.fold<int>(0, (sum, log) => sum + log.amount);
+      
+      final sources = <String, int>{};
+      for (var log in expLogs) {
+        String sourceName = '';
+        switch (log.sourceType) {
+          case 'rating_received':
+            sourceName = 'ได้รับคะแนน';
+            break;
+          case 'gave_rating':
+            sourceName = 'การให้คะแนน';
+            break;
+          case 'submit_work':
+            sourceName = 'ส่งงาน';
+            break;
+          case 'check_in':
+            sourceName = 'เช็คอิน';
+            break;
+          default:
+            sourceName = 'อื่นๆ';
+        }
+        sources.update(sourceName, (value) => value + log.amount, ifAbsent: () => log.amount);
+      }
+      
+      final summaryMessage = sources.entries.map((e) => '${e.key} (+${e.value})').join(', ');
+
+      notifications.add(NotificationItem(
+        id: 'exp_summary_${DateFormat('yyyy-MM-dd').format(now)}',
+        title: 'วันนี้คุณได้รับ +$totalExpToday EXP!',
+        message: summaryMessage,
+        icon: Icons.star,
+        color: Colors.amber,
+        timestamp: Timestamp.now(),
+      ));
+    }
+    // --- [END] NEW CODE ---
+
+    // Fetch other notifications (attendance, leave, etc.)
     final attendanceLogsSnapshot = await FirebaseFirestore.instance
         .collection('attendance_log')
         .where('employeeId', isEqualTo: employeeId)
@@ -108,27 +151,21 @@ class _NotificationScreenState extends State<NotificationScreen> {
     for (var doc in attendanceLogsSnapshot.docs) {
       final log = AttendanceLog.fromFirestore(doc);
       String incompleteMessage = '';
-      // Check for today's incomplete check-out
       if (log.checkIn != null && log.checkOut == null && log.date.toDate().day == now.day && log.date.toDate().month == now.month && log.date.toDate().year == now.year) {
         incompleteMessage = 'คุณยังไม่ได้สแกนออกงานสำหรับวันนี้';
       }
-      // Check for today's incomplete break-in
       else if (log.breakOut != null && log.breakIn == null && log.date.toDate().day == now.day && log.date.toDate().month == now.month && log.date.toDate().year == now.year) {
         incompleteMessage = 'คุณยังไม่ได้สแกนเข้าพักสำหรับวันนี้';
       }
-      // Check for past days' incomplete check-in (e.g., only check-out exists)
       else if (log.checkIn == null && log.checkOut != null && log.date.toDate().isBefore(DateTime(now.year, now.month, now.day))) {
         incompleteMessage = 'คุณไม่ได้สแกนเข้างานสำหรับวันที่ ${DateFormat('d MMM', 'th_TH').format(log.date.toDate())}';
       }
-      // Check for past days' incomplete check-out (e.g., check-in exists but no check-out)
       else if (log.checkIn != null && log.checkOut == null && log.date.toDate().isBefore(DateTime(now.year, now.month, now.day))) {
         incompleteMessage = 'คุณยังไม่ได้สแกนออกงานสำหรับวันที่ ${DateFormat('d MMM', 'th_TH').format(log.date.toDate())}';
       }
-      // Check for past days' incomplete break-in (e.g., break-out exists but no break-in)
       else if (log.breakOut != null && log.breakIn == null && log.date.toDate().isBefore(DateTime(now.year, now.month, now.day))) {
         incompleteMessage = 'คุณยังไม่ได้สแกนเข้าพักสำหรับวันที่ ${DateFormat('d MMM', 'th_TH').format(log.date.toDate())}';
       }
-
 
       if (incompleteMessage.isNotEmpty) {
         notifications.add(NotificationItem(
@@ -138,12 +175,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
           icon: Icons.warning_amber,
           color: Colors.orange,
           timestamp: log.date,
-          onTap: () { /* Could navigate to attendance history */ },
         ));
       }
     }
 
-    // --- 2. Leave Requests (Approved/Rejected) ---
     final leaveRequestsSnapshot = await FirebaseFirestore.instance
         .collection('leave_requests')
         .where('employeeId', isEqualTo: employeeId)
@@ -161,12 +196,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
           icon: leave.status == 'approved' ? Icons.check_circle : Icons.cancel,
           color: leave.status == 'approved' ? Colors.green : Colors.red,
           timestamp: leave.actionAt ?? leave.requestedAt,
-          onTap: () { /* Navigate to leave detail */ },
         ));
       }
     }
 
-    // --- 3. Admin Announcements (Mentions) ---
     final announcementsSnapshot = await FirebaseFirestore.instance
         .collection('announcements')
         .where('mentionedEmployeeId', isEqualTo: employeeId)
@@ -183,11 +216,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
         icon: Icons.campaign,
         color: Colors.blue,
         timestamp: announcement.timestamp,
-        onTap: () { /* Navigate to announcement screen */ },
       ));
     }
 
-    // --- 4. Time Update Requests (Approved/Rejected) ---
     final timeUpdateRequestsSnapshot = await FirebaseFirestore.instance
         .collection('time_update_requests')
         .where('employeeId', isEqualTo: employeeId)
@@ -205,16 +236,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
           icon: request.status == 'approved' ? Icons.check_circle : Icons.cancel,
           color: request.status == 'approved' ? Colors.green : Colors.red,
           timestamp: request.actionAt ?? request.requestedAt,
-          onTap: () { /* Navigate to time update detail */ },
         ));
       }
     }
 
-    // --- 5. Quiz Assignments (Pending) ---
     final quizAssignmentsSnapshot = await FirebaseFirestore.instance
         .collection('quiz_assignments')
         .where('employeeId', isEqualTo: employeeId)
-        .where('status', isEqualTo: 'pending') // Only show pending quizzes as notifications
+        .where('status', isEqualTo: 'pending')
         .where('assignedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo))
         .orderBy('assignedAt', descending: true)
         .get();
@@ -223,7 +252,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       final assignment = QuizAssignment.fromFirestore(doc);
       final quizDoc = await FirebaseFirestore.instance.collection('quizzes').doc(assignment.quizId).get();
       if (quizDoc.exists) {
-        final quiz = Quiz.fromFirestore(quizDoc, []); // Pass empty questions list as it's not needed here
+        final quiz = Quiz.fromFirestore(quizDoc, []);
         notifications.add(NotificationItem(
           id: 'quiz_assignment_${assignment.id}',
           title: 'คุณมีแบบทดสอบใหม่ที่ต้องทำ',
@@ -231,15 +260,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
           icon: Icons.quiz,
           color: Colors.purple,
           timestamp: assignment.assignedAt ?? Timestamp.now(),
-          onTap: () { /* Navigate to quiz taking screen */ },
         ));
       }
     }
 
-    // --- 6. Work Submissions (Tagged) ---
     final workSubmissionsSnapshot = await FirebaseFirestore.instance
         .collection('work_submissions')
-        .where('taggedEmployees', arrayContains: {'id': employeeId}) // This requires a composite index
+        .where('taggedEmployees', arrayContains: {'id': employeeId})
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo))
         .orderBy('timestamp', descending: true)
         .get();
@@ -253,20 +280,18 @@ class _NotificationScreenState extends State<NotificationScreen> {
         icon: Icons.alternate_email,
         color: Colors.teal,
         timestamp: submission.timestamp,
-        onTap: () { /* Navigate to work submission detail */ },
       ));
     }
 
     if (mounted) {
       setState(() {
         _allNotifications = notifications;
-        _applyFiltersAndSort(); // Apply initial filter and sort
+        _applyFiltersAndSort();
         _isLoading = false;
       });
     }
   }
 
-  // Apply filters (search) and sorting based on current state
   void _applyFiltersAndSort() {
     List<NotificationItem> filtered = _allNotifications.where((notification) {
       final query = _searchQuery.toLowerCase();
@@ -274,24 +299,21 @@ class _NotificationScreenState extends State<NotificationScreen> {
              notification.message.toLowerCase().contains(query);
     }).toList();
 
-    // Sort based on selected option
     filtered.sort((a, b) {
       int compareResult = 0;
       switch (_sortOption) {
         case _SortOption.latest:
-          compareResult = b.timestamp.compareTo(a.timestamp); // Newest first
+          compareResult = b.timestamp.compareTo(a.timestamp);
           break;
         case _SortOption.oldest:
-          compareResult = a.timestamp.compareTo(b.timestamp); // Oldest first
+          compareResult = a.timestamp.compareTo(b.timestamp);
           break;
         case _SortOption.read:
-          // Read notifications come first, then sort by latest timestamp
           if (a.isRead && !b.isRead) return -1;
           if (!a.isRead && b.isRead) return 1;
           compareResult = b.timestamp.compareTo(a.timestamp);
           break;
         case _SortOption.unread:
-          // Unread notifications come first, then sort by latest timestamp
           if (!a.isRead && b.isRead) return -1;
           if (a.isRead && !b.isRead) return 1;
           compareResult = b.timestamp.compareTo(a.timestamp);
@@ -305,13 +327,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
     });
   }
 
-  // Toggle read status of a notification
   void _toggleReadStatus(String notificationId) {
     setState(() {
       final index = _allNotifications.indexWhere((n) => n.id == notificationId);
       if (index != -1) {
         _allNotifications[index].isRead = !_allNotifications[index].isRead;
-        _applyFiltersAndSort(); // Re-apply filters and sort to reflect changes
+        _applyFiltersAndSort();
       }
     });
   }
@@ -319,9 +340,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   @override
   Widget build(BuildContext context) {
     return AppLayout(
-      // --- [START] FIXED BUG: Pass actual isAdmin status ---
       isUserAdmin: widget.loggedInEmployee.isAdmin,
-      // --- [END] FIXED BUG ---
       loggedInEmployee: widget.loggedInEmployee,
       overrideTitle: 'การแจ้งเตือน',
       showBackButton: true,
@@ -355,7 +374,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       onSelected: (_SortOption newValue) {
                         setState(() {
                           _sortOption = newValue;
-                          _applyFiltersAndSort(); // Re-apply sort
+                          _applyFiltersAndSort();
                         });
                       },
                       itemBuilder: (BuildContext context) => <PopupMenuEntry<_SortOption>>[
@@ -410,7 +429,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                           elevation: 2,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          color: notification.isRead ? Colors.grey.shade100 : Colors.white, // Grey if read
+                          color: notification.isRead ? Colors.grey.shade100 : Colors.white,
                           child: ListTile(
                             leading: Icon(notification.icon, color: notification.color, size: 30),
                             title: Text(notification.title, style: GoogleFonts.anuphan(fontWeight: FontWeight.bold)),
@@ -434,7 +453,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       childCount: _displayedNotifications.length,
                     ),
                   ),
-        const SliverToBoxAdapter(child: SizedBox(height: 80)), // Add space for FAB
+        const SliverToBoxAdapter(child: SizedBox(height: 80)),
       ],
     );
   }

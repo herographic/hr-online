@@ -11,16 +11,22 @@ import 'package:provider/provider.dart';
 
 class EmployeePresenceNode extends StatelessWidget {
   final String employeeId;
+  final Employee? employee; // optional preloaded
   final VoidCallback onTap;
 
   const EmployeePresenceNode({
     super.key,
     required this.employeeId,
+    this.employee,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (employee != null) {
+      final positionText = employee!.positions.map((p) => p['name'] ?? '').join(', ');
+      return _buildCard(context, employee!, positionText);
+    }
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
@@ -30,135 +36,134 @@ class EmployeePresenceNode extends StatelessWidget {
         if (!snapshot.hasData) {
           return _buildPlaceholder();
         }
+        final emp = Employee.fromFirestore(snapshot.data!);
+        final positionText = emp.positions.map((p) => p['name'] ?? '').join(', ');
+        return _buildCard(context, emp, positionText);
+      },
+    );
+  }
 
-        final employee = Employee.fromFirestore(snapshot.data!);
-        final positionText =
-            employee.positions.map((p) => p['name'] ?? '').join(', ');
+  Widget _buildCard(BuildContext context, Employee employee, String positionText) {
+    return Consumer<AttendanceStatusProvider>(
+      builder: (context, attendanceProvider, child) {
+        final attendanceStatus =
+            attendanceProvider.statuses[employee.employeeId] ??
+                EmployeeAttendanceStatus.unknown;
 
-        return Consumer<AttendanceStatusProvider>(
-          builder: (context, attendanceProvider, child) {
-            final attendanceStatus =
-                attendanceProvider.statuses[employee.employeeId] ??
-                    EmployeeAttendanceStatus.unknown;
-
-            return GestureDetector(
-              onTap: onTap,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        )
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: ClipPath(
-                            clipper: _SemicircleClipper(),
-                            child: Container(
-                              color: _getStatusColor(attendanceStatus)
-                                  .withOpacity(0.15),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                          child: Column(
-                            children: [
-                              Text(
-                                employee.nickname,
-                                style: GoogleFonts.anuphan(
-                                    fontWeight: FontWeight.bold, fontSize: 14),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                positionText.isEmpty
-                                    ? '(${employee.employeeId})'
-                                    : positionText,
-                                style: GoogleFonts.anuphan(
-                                    fontSize: 11, color: Colors.grey.shade600),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Positioned(
-                    top: 10,
-                    left: 0,
-                    right: 0,
-                    child: EmployeeStatusAvatar(
-                      employeeId: employee.employeeId,
-                      imageUrl: employee.profileImageUrl,
-                      gender: employee.gender,
-                      radius: 30,
-                    ),
-                  ),
-                  if (employee.isOutsource)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade900,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white, width: 1.5)
-                        ),
-                        child: Text(
-                          'OutSource',
-                          style: GoogleFonts.anuphan(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  // --- [START] NEW WIDGET: Employment Status Badge ---
-                  if (employee.employmentStatus != null && employee.employmentStatus!.isNotEmpty)
-                    Positioned(
-                      bottom: 45, // Adjust position to be over the avatar
-                      left: 0,
-                      right: 0,
-                      child: Center(
+        return GestureDetector(
+          onTap: onTap,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: ClipPath(
+                        clipper: _SemicircleClipper(),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade800.withOpacity(0.85),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            employee.employmentStatus!,
-                            style: GoogleFonts.anuphan(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
+                          color: _getStatusColor(attendanceStatus)
+                              .withOpacity(0.15),
                         ),
                       ),
                     ),
-                  // --- [END] NEW WIDGET: Employment Status Badge ---
-                ],
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                      child: Column(
+                        children: [
+                          Text(
+                            employee.nickname,
+                            style: GoogleFonts.anuphan(
+                                fontWeight: FontWeight.bold, fontSize: 14),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            positionText.isEmpty
+                                ? '(${employee.employeeId})'
+                                : positionText,
+                            style: GoogleFonts.anuphan(
+                                fontSize: 11, color: Colors.grey.shade600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            );
-          },
+              Positioned(
+                top: 10,
+                left: 0,
+                right: 0,
+                child: EmployeeStatusAvatar(
+                  employeeId: employee.employeeId,
+                  imageUrl: employee.profileImageUrl,
+                  gender: employee.gender,
+                  radius: 30,
+                ),
+              ),
+              if (employee.isOutsource)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade900,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white, width: 1.5)
+                    ),
+                    child: Text(
+                      'OutSource',
+                      style: GoogleFonts.anuphan(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              if (employee.employmentStatus != null && employee.employmentStatus!.isNotEmpty)
+                Positioned(
+                  bottom: 45, // Adjust position to be over the avatar
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade800.withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        employee.employmentStatus!,
+                        style: GoogleFonts.anuphan(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );

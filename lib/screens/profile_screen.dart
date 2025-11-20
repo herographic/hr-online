@@ -12,6 +12,7 @@ import 'package:hr_online/models/employee_model.dart';
 import 'package:hr_online/models/work_shift_model.dart';
 import 'package:hr_online/screens/profile/face_registration_screen.dart';
 import 'package:hr_online/widgets/employee_avatar.dart';
+import 'package:hr_online/widgets/experience_bar.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
@@ -80,7 +81,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
-    // Dispose all controllers
     _nicknameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
@@ -101,7 +101,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _toggleEditMode() {
     setState(() {
       _isEditMode = !_isEditMode;
-      // If we are exiting edit mode, reset changes
       if (!_isEditMode) {
         _initializeControllers(widget.employee);
         _imageBytes = null;
@@ -209,8 +208,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.all(16.0),
               children: [
                 _buildHeader(context, employee),
-                const SizedBox(height: 24),
-                // --- [START] ADDED FACE REGISTRATION BUTTON ---
+                const SizedBox(height: 16),
+                // --- [START] ADDED CODE: Experience Bar with background ---
+                Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Container(
+                    padding: const EdgeInsets.all(12.0),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF00c6ff), Color(0xFF0072ff)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: ExperienceBar(employee: employee),
+                  ),
+                ),
+                // --- [END] ADDED CODE ---
+                const SizedBox(height: 16),
                 _buildInfoCard(
                   context,
                   title: 'ความปลอดภัย',
@@ -229,7 +246,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ]
                 ),
                 const SizedBox(height: 16),
-                // --- [END] ADDED FACE REGISTRATION BUTTON ---
                 _buildPersonalInfoCard(employee),
                 const SizedBox(height: 16),
                 _buildWorkInfoCard(employee),
@@ -243,7 +259,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // Other build methods remain the same...
   Widget _buildHeader(BuildContext context, Employee employee) {
     ImageProvider? imageProvider;
     if (_imageBytes != null) {

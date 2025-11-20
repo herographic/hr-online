@@ -2,7 +2,39 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Helper functions remain the same...
+// --- [START] MODIFIED CODE: New Leveling System ---
+class LevelingSystem {
+  static const Map<int, String> titles = {
+    1: "น้องใหม่",
+    5: "สิบตำรวจตรี",
+    10: "สิบตำรวจโท",
+    15: "สิบตำรวจเอก",
+    20: "ร้อยตำรวจตรี",
+    25: "ร้อยตำรวจโท",
+    30: "ร้อยตำรวจเอก",
+    40: "พันตำรวจตรี",
+    50: "พันตำรวจโท",
+    60: "พันตำรวจเอก",
+    70: "พลตำรวจตรี",
+    80: "พลตำรวจโท",
+    90: "พลตำรวจเอก",
+    100: "ผู้บัญชาการตำรวจแห่งชาติ",
+  };
+
+  static String getTitleForLevel(int level) {
+    int currentTitleLevel = 1;
+    for (var titleLevel in titles.keys) {
+      if (level >= titleLevel) {
+        currentTitleLevel = titleLevel;
+      } else {
+        break;
+      }
+    }
+    return titles[currentTitleLevel]!;
+  }
+}
+// --- [END] MODIFIED CODE ---
+
 Timestamp _parseTimestamp(dynamic value) {
   if (value is Timestamp) return value;
   if (value is String && value.isNotEmpty) {
@@ -61,13 +93,14 @@ class Employee {
   // Financial Information
   final num salary;
   final Map<String, dynamic> bankAccount;
-  final int totalScore;
+  
+  final int level;
+  final int exp;
+  final int nextLevelExp;
 
   final bool isAdmin;
   final bool isDepartmentHead;
-  // --- [START] NEW FIELD ---
-  final bool isOutsource; // Flag for outsource personnel
-  // --- [END] NEW FIELD ---
+  final bool isOutsource;
 
   final Timestamp? lastSeen;
 
@@ -97,16 +130,19 @@ class Employee {
     required this.dailyWorkShifts,
     required this.salary,
     required this.bankAccount,
-    this.totalScore = 0,
+    this.level = 1,
+    this.exp = 0,
+    this.nextLevelExp = 100,
     this.lastSeen,
     this.isAdmin = false,
     this.isDepartmentHead = false,
-    this.isOutsource = false, // --- [START] ADDED TO CONSTRUCTOR ---
+    this.isOutsource = false,
     this.employmentStatus,
     this.employmentStatusNote,
   });
 
   String get fullName => '$firstName $lastName';
+  String get levelTitle => LevelingSystem.getTitleForLevel(level);
 
   factory Employee.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -121,7 +157,7 @@ class Employee {
     }
 
     return Employee(
-      employeeId: data['employee_code'] ?? '',
+      employeeId: (data['employee_code'] ?? doc.id) as String,
       title: data['title'] ?? '',
       firstName: data['employee_name'] ?? '',
       lastName: data['employee_last_name'] ?? '',
@@ -144,11 +180,13 @@ class Employee {
       dailyWorkShifts: Map<String, String>.from(data['dailyWorkShifts'] ?? {}),
       salary: data['salary'] ?? 0,
       bankAccount: _parseMap(data['bank_account']),
-      totalScore: data['totalScore'] ?? 0,
+      level: data['level'] ?? 1,
+      exp: data['exp'] ?? 0,
+      nextLevelExp: data['nextLevelExp'] ?? 100,
       lastSeen: data['lastSeen'] as Timestamp?,
       isAdmin: data['isAdmin'] ?? false,
       isDepartmentHead: data['isDepartmentHead'] ?? false,
-      isOutsource: data['isOutsource'] ?? false, // --- [START] ADDED MAPPING ---
+      isOutsource: data['isOutsource'] ?? false,
       employmentStatus: data['employmentStatus'],
       employmentStatusNote: data['employmentStatusNote'],
     );

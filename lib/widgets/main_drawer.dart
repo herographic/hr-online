@@ -21,6 +21,7 @@ import 'package:hr_online/screens/employee/compensation_check_in_screen.dart';
 import 'package:hr_online/screens/employee/my_quiz_rankings_screen.dart';
 import 'package:hr_online/screens/employee/quiz_list_screen.dart';
 import 'package:hr_online/screens/employee/quiz_ranking_screen.dart';
+import 'package:hr_online/screens/employee_board_screen.dart';
 import 'package:hr_online/screens/leave/leave_approval_list_screen.dart';
 import 'package:hr_online/screens/leave/leave_request_list_screen.dart';
 import 'package:hr_online/screens/login_screen.dart';
@@ -32,6 +33,7 @@ import 'package:hr_online/screens/ranking_screen.dart';
 import 'package:hr_online/screens/upload_employee_screen.dart';
 import 'package:hr_online/screens/workforce_allocation_screen.dart';
 import 'package:hr_online/widgets/employee_status_avatar.dart';
+import 'package:hr_online/widgets/experience_bar.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -86,20 +88,41 @@ class MainDrawer extends StatelessWidget {
         ? loggedInEmployee!.positions.map((p) => p['name'] ?? '').join(', ')
         : 'ยังไม่มีตำแหน่ง';
 
-    return DrawerHeader(
-      margin: EdgeInsets.zero,
-      padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF00c6ff), Color(0xFF0072ff)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+    return Container(
+      color: const Color(0xFFe52d27),
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top,
+        left: 16,
+        right: 16,
+        bottom: 16,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Icon(Icons.circle, color: statusInfo['color'] as Color, size: 12),
+              const SizedBox(width: 8),
+              Text(
+                statusInfo['text'] as String,
+                style: GoogleFonts.anuphan(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+              const Spacer(),
+              Text(
+                isUserAdmin ? 'Admin' : (loggedInEmployee?.nickname ?? ''),
+                style: GoogleFonts.anuphan(color: Colors.white70, fontSize: 12),
+              ),
+              IconButton(
+                icon: const Icon(Icons.logout, color: Colors.white, size: 22),
+                onPressed: () => _handleLogout(context),
+                tooltip: 'ออกจากระบบ',
+                splashRadius: 20,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -122,35 +145,18 @@ class MainDrawer extends StatelessWidget {
                     ),
                     Text(
                       isUserAdmin ? 'Admin' : '$positionNames (${loggedInEmployee?.employeeId ?? ''})',
-                      style: GoogleFonts.anuphan(color: Colors.white.withOpacity(0.9)),
-                       overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.anuphan(color: Colors.white.withOpacity(0.9), fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.only(left: 4.0),
-            child: Row(
-              children: [
-                Icon(Icons.circle, color: statusInfo['color'] as Color, size: 12),
-                const SizedBox(width: 8),
-                Text(
-                  statusInfo['text'] as String,
-                  style: GoogleFonts.anuphan(color: Colors.white, fontWeight: FontWeight.w600),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.logout, color: Colors.white, size: 22),
-                  onPressed: () => _handleLogout(context),
-                  tooltip: 'ออกจากระบบ',
-                  splashRadius: 20,
-                ),
-              ],
-            ),
-          )
+          const SizedBox(height: 12),
+          
+          if (loggedInEmployee != null)
+            ExperienceBar(employee: loggedInEmployee!),
         ],
       ),
     );
@@ -161,6 +167,10 @@ class MainDrawer extends StatelessWidget {
 
     return [
       _buildSectionHeader('เมนูทั่วไป'),
+      // --- [START] ADDED CODE: Employee Board Menu Item ---
+      _buildDrawerItem(context, 'บอร์ดพนักงาน', Icons.dashboard_customize_outlined,
+          () => _navigateTo(context, EmployeeBoardScreen(isUserAdmin: isUserAdmin, loggedInEmployee: loggedInEmployee))),
+      // --- [END] ADDED CODE ---
       _buildDrawerItem(context, 'ข้อมูลส่วนตัว', Icons.person,
           isEmployeeView ? () => _navigateTo(context, ProfileScreen(employee: employee)) : null),
       if (isEmployeeView && employee.isDepartmentHead)

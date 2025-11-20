@@ -1,6 +1,7 @@
 // lib/screens/attendance/attendance_options_screen.dart
 
 import 'package:collection/collection.dart';
+import 'dart:ui' show ImageFilter; // For glass blur
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hr_online/models/attendance_log_model.dart';
@@ -12,6 +13,7 @@ import 'package:hr_online/screens/attendance/time_update_request_screen.dart';
 import 'package:hr_online/screens/qr_scanner_screen.dart';
 import 'package:hr_online/widgets/app_layout.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
+import 'package:hr_online/widgets/experience_bar.dart';
 import 'package:intl/intl.dart';
 
 class AttendanceOptionsScreen extends StatefulWidget {
@@ -30,16 +32,14 @@ class AttendanceOptionsScreen extends StatefulWidget {
 }
 
 class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
-  // --- [START] MODIFIED CODE: Lifted state up ---
   Future<Map<String, dynamic>>? _attendanceDataFuture;
 
   @override
   void initState() {
     super.initState();
-    _refreshAttendanceData(); // Initial data load
+    _refreshAttendanceData();
   }
 
-  /// Fetches the latest attendance data for the current employee.
   Future<Map<String, dynamic>> _fetchAttendanceData() async {
     if (widget.loggedInEmployee == null) return {};
 
@@ -72,7 +72,6 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
     };
   }
   
-  /// Triggers a UI refresh by re-fetching attendance data.
   void _refreshAttendanceData() {
     if (mounted) {
       setState(() {
@@ -80,7 +79,6 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
       });
     }
   }
-  // --- [END] MODIFIED CODE ---
 
   Future<void> _startVerification() async {
     if (widget.loggedInEmployee == null) return;
@@ -109,9 +107,7 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
       ),
     );
     
-    // --- [START] MODIFIED CODE: Refresh data on return ---
     _refreshAttendanceData();
-    // --- [END] MODIFIED CODE ---
 
     if (isVerified == true) {
       if (mounted) {
@@ -130,19 +126,54 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Elegant blue gradient background for glass theme
+    const backgroundGradient = LinearGradient(
+      colors: [Color(0xFF00c6ff), Color(0xFF0072ff)],
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+    );
+
     return AppLayout(
       isUserAdmin: widget.isUserAdmin,
       loggedInEmployee: widget.loggedInEmployee,
       overrideTitle: 'เลือกวิธีลงเวลา',
       showBackButton: true,
+      bodyGradient: backgroundGradient,
       bodySlivers: [
+        // --- [START] ADDED CODE: Experience Bar ---
+        if (widget.loggedInEmployee != null)
+          SliverToBoxAdapter(
+            child: StreamBuilder<firestore.DocumentSnapshot>(
+              stream: firestore.FirebaseFirestore.instance.collection('users').doc(widget.loggedInEmployee!.employeeId).snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || !snapshot.data!.exists) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: _GlassPanel(
+                      borderRadius: BorderRadius.circular(12),
+                      padding: const EdgeInsets.all(12.0),
+                      child: ExperienceBar(employee: widget.loggedInEmployee!),
+                    ),
+                  );
+                }
+                final updatedEmployee = Employee.fromFirestore(snapshot.data!);
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: _GlassPanel(
+                    borderRadius: BorderRadius.circular(12),
+                    padding: const EdgeInsets.all(12.0),
+                    child: ExperienceBar(employee: updatedEmployee),
+                  ),
+                );
+              },
+            ),
+          ),
+        // --- [END] ADDED CODE ---
         SliverToBoxAdapter(
-          // --- [START] MODIFIED CODE: Pass future to the card ---
           child: _AttendanceInfoCard(
             employee: widget.loggedInEmployee,
             attendanceDataFuture: _attendanceDataFuture,
           ),
-          // --- [END] MODIFIED CODE ---
         ),
         SliverPadding(
           padding: const EdgeInsets.all(16.0),
@@ -157,14 +188,12 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
                 icon: Icons.qr_code_scanner,
                 label: 'สแกน QR Code',
                 onTap: () {
-                  // --- [START] MODIFIED CODE: Refresh on return ---
                   Navigator.of(context).push(MaterialPageRoute(
                     builder: (context) => QRScannerScreen(
                       isUserAdmin: widget.isUserAdmin,
                       loggedInEmployee: widget.loggedInEmployee,
                     ),
                   )).then((_) => _refreshAttendanceData());
-                  // --- [END] MODIFIED CODE ---
                 },
               ),
               _buildOptionButton(
@@ -178,14 +207,12 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
                 icon: Icons.location_on,
                 label: 'เช็คอินด้วย GPS',
                 onTap: () {
-                  // --- [START] MODIFIED CODE: Refresh on return ---
                   Navigator.of(context).push(MaterialPageRoute(
                     builder: (context) => GpsCheckinScreen(
                       isUserAdmin: widget.isUserAdmin,
                       loggedInEmployee: widget.loggedInEmployee,
                     ),
                   )).then((_) => _refreshAttendanceData());
-                  // --- [END] MODIFIED CODE ---
                 },
               ),
               _buildOptionButton(
@@ -200,13 +227,11 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
                 label: 'ขออัพเดทเวลา',
                 onTap: () {
                   if (widget.loggedInEmployee != null) {
-                    // --- [START] MODIFIED CODE: Refresh on return ---
                     Navigator.of(context).push(MaterialPageRoute(
                       builder: (context) => TimeUpdateRequestScreen(
                         loggedInEmployee: widget.loggedInEmployee!,
                       ),
                     )).then((_) => _refreshAttendanceData());
-                    // --- [END] MODIFIED CODE ---
                   }
                 },
               ),
@@ -231,22 +256,15 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
       {required IconData icon,
       required String label,
       required VoidCallback? onTap}) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: Theme.of(context).primaryColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-        disabledBackgroundColor: Colors.grey.shade200,
-        disabledForegroundColor: Colors.grey.shade500,
-      ),
-      onPressed: onTap,
+    final disabled = onTap == null;
+    return _GlassButton(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      disabled: disabled,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 36),
+          Icon(icon, size: 36, color: disabled ? Colors.white54 : Colors.white),
           const SizedBox(height: 8),
           Text(
             label,
@@ -254,6 +272,7 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
             style: GoogleFonts.anuphan(
               fontSize: 14,
               fontWeight: FontWeight.bold,
+              color: disabled ? Colors.white70 : Colors.white,
             ),
           ),
         ],
@@ -264,11 +283,9 @@ class _AttendanceOptionsScreenState extends State<AttendanceOptionsScreen> {
 
 class _AttendanceInfoCard extends StatelessWidget {
   final Employee? employee;
-  // --- [START] MODIFIED CODE: Accept future from parent ---
   final Future<Map<String, dynamic>>? attendanceDataFuture;
 
   const _AttendanceInfoCard({this.employee, this.attendanceDataFuture});
-  // --- [END] MODIFIED CODE ---
 
   @override
   Widget build(BuildContext context) {
@@ -277,9 +294,7 @@ class _AttendanceInfoCard extends StatelessWidget {
     }
 
     return FutureBuilder<Map<String, dynamic>>(
-      // --- [START] MODIFIED CODE: Use the passed future ---
       future: attendanceDataFuture,
-      // --- [END] MODIFIED CODE ---
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -351,21 +366,10 @@ class _AttendanceInfoCard extends StatelessWidget {
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          child: Card(
-            elevation: 4,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Container(
-              padding: const EdgeInsets.all(16.0),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: LinearGradient(
-                  colors: [Colors.blue.shade700, Colors.blue.shade900],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Column(
+          child: _GlassPanel(
+            borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
                 children: [
                   Text(
                     DateFormat('EEEE ที่ d MMMM พ.ศ. yyyy', 'th_TH')
@@ -396,7 +400,6 @@ class _AttendanceInfoCard extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
           ),
         );
       },
@@ -423,6 +426,87 @@ class _AttendanceInfoCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// --- Glass theme helpers ---
+class _GlassPanel extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final BorderRadius? borderRadius;
+
+  const _GlassPanel({
+    required this.child,
+    this.padding,
+    this.borderRadius,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = borderRadius ?? BorderRadius.circular(16);
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            color: Colors.white.withOpacity(0.12),
+            border: Border.all(color: Colors.white.withOpacity(0.22), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              )
+            ],
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassButton extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final BorderRadius? borderRadius;
+  final bool disabled;
+
+  const _GlassButton({
+    required this.child,
+    required this.onTap,
+    this.borderRadius,
+    this.disabled = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = borderRadius ?? BorderRadius.circular(16);
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Material(
+          color: Colors.white.withOpacity(disabled ? 0.08 : 0.14),
+          child: InkWell(
+            onTap: disabled ? null : onTap,
+            splashColor: Colors.white24,
+            highlightColor: Colors.white10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(color: Colors.white.withOpacity(0.22), width: 1),
+              ),
+              child: child,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
